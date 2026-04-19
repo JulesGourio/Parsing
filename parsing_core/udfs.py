@@ -22,6 +22,11 @@ def extract_local_text_udf(content_series: pd.Series, ext_series: pd.Series) -> 
                     "parser_error": "No Content",
                     "parser_strategy": "none",
                     "parse_time_seconds": 0.0,
+                    "ocr_attempted": False,
+                    "ocr_used": False,
+                    "ocr_engine_trace": None,
+                    "ocr_pages": 0,
+                    "ocr_supplement_pages": 0,
                 }
             )
         else:

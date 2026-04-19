@@ -740,6 +740,11 @@ df_local_attempt = (
     .withColumn("parser_error", F.col("local_parse.parser_error"))
     .withColumn("parser_strategy", F.col("local_parse.parser_strategy"))
     .withColumn("parse_time_seconds", F.col("local_parse.parse_time_seconds"))
+    .withColumn("ocr_attempted", F.col("local_parse.ocr_attempted"))
+    .withColumn("ocr_used", F.col("local_parse.ocr_used"))
+    .withColumn("ocr_engine_trace", F.col("local_parse.ocr_engine_trace"))
+    .withColumn("ocr_pages", F.col("local_parse.ocr_pages"))
+    .withColumn("ocr_supplement_pages", F.col("local_parse.ocr_supplement_pages"))
     .drop("local_parse")
     .withColumn(
         "is_local_success",
@@ -1059,6 +1064,11 @@ df_processed_files = (
         "parse_status",
         "error_trace",
         "parse_time_seconds",
+        "ocr_attempted",
+        "ocr_used",
+        "ocr_engine_trace",
+        "ocr_pages",
+        "ocr_supplement_pages",
         "document_char_count",
         "document_token_count",
     )

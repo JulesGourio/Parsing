@@ -42,6 +42,44 @@ PDF_EXCLUDE_TABLE_TEXT = os.getenv("PDF_EXCLUDE_TABLE_TEXT", "1").strip().lower(
     "on",
 }
 MAX_PPTX_SLIDES = max(1, int(os.getenv("MAX_PPTX_SLIDES", "400")))
+
+OCR_ENABLED = os.getenv("OCR_ENABLED", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+OCR_PDF_FALLBACK_ENABLED = os.getenv("OCR_PDF_FALLBACK_ENABLED", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+OCR_ENGINE_PRIORITY = tuple(
+    [
+        engine.strip().lower()
+        for engine in os.getenv("OCR_ENGINE_PRIORITY", "rapidocr,tesseract").split(",")
+        if engine.strip()
+    ]
+)
+OCR_MIN_CONFIDENCE = min(1.0, max(0.0, float(os.getenv("OCR_MIN_CONFIDENCE", "0.35"))))
+OCR_IMAGE_PREPROCESS = os.getenv("OCR_IMAGE_PREPROCESS", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+OCR_MIN_IMAGE_SIDE_PX = max(240, int(os.getenv("OCR_MIN_IMAGE_SIDE_PX", "900")))
+OCR_MAX_IMAGE_SIDE_PX = max(OCR_MIN_IMAGE_SIDE_PX, int(os.getenv("OCR_MAX_IMAGE_SIDE_PX", "2600")))
+OCR_PDF_RENDER_DPI = max(72, int(os.getenv("OCR_PDF_RENDER_DPI", "220")))
+OCR_MAX_PDF_PAGES = max(1, int(os.getenv("OCR_MAX_PDF_PAGES", "120")))
+OCR_MIN_PDF_PAGE_TEXT_CHARS = max(0, int(os.getenv("OCR_MIN_PDF_PAGE_TEXT_CHARS", "80")))
+OCR_TIMEOUT_SECONDS = max(1.0, float(os.getenv("OCR_TIMEOUT_SECONDS", "25")))
+OCR_TESSERACT_LANG = os.getenv("OCR_TESSERACT_LANG", "fra+eng")
+OCR_TESSERACT_PSM = max(3, min(13, int(os.getenv("OCR_TESSERACT_PSM", "6"))))
+OCR_TESSERACT_OEM = max(0, min(3, int(os.getenv("OCR_TESSERACT_OEM", "1"))))
+OCR_TESSERACT_BIN = os.getenv("OCR_TESSERACT_BIN", "tesseract")
+
 MAX_FALLBACK_TEXT_CHARS = max(2000, int(os.getenv("MAX_FALLBACK_TEXT_CHARS", "40000")))
 MAX_ERROR_MESSAGE_CHARS = max(120, int(os.getenv("MAX_ERROR_MESSAGE_CHARS", "1200")))
 MAX_CHUNK_CHARS = max(200, int(os.getenv("MAX_CHUNK_CHARS", "12000")))

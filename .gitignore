@@ -14,8 +14,8 @@ antiword_*.deb
 benchmark_samples/
 benchmark_samples_hard/
 
-# Benchmark outputs and reports
-benchmark_*.json
-benchmark_*.jsonl
-benchmark_*.md
-benchmark_*.html
+# Benchmark outputs and reports (legacy root-level files)
+/benchmark_*.json
+/benchmark_*.jsonl
+/benchmark_*.md
+/benchmark_*.html

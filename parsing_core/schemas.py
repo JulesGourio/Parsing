@@ -6,6 +6,11 @@ TEXT_PARSE_SCHEMA = T.StructType(
         T.StructField("parser_error", T.StringType(), True),
         T.StructField("parser_strategy", T.StringType(), True),
         T.StructField("parse_time_seconds", T.FloatType(), True),
+        T.StructField("ocr_attempted", T.BooleanType(), True),
+        T.StructField("ocr_used", T.BooleanType(), True),
+        T.StructField("ocr_engine_trace", T.StringType(), True),
+        T.StructField("ocr_pages", T.IntegerType(), True),
+        T.StructField("ocr_supplement_pages", T.IntegerType(), True),
     ]
 )
 

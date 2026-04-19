@@ -17,6 +17,32 @@ from docx.oxml.ns import qn
 from lxml import etree
 from pptx import Presentation
 
+try:
+    import numpy as np
+except Exception:  # pragma: no cover - optional dependency
+    np = None
+
+try:
+    from PIL import Image, ImageOps
+except Exception:  # pragma: no cover - optional dependency
+    Image = None
+    ImageOps = None
+
+try:
+    import pypdfium2 as pdfium
+except Exception:  # pragma: no cover - optional dependency
+    pdfium = None
+
+try:
+    import pytesseract
+except Exception:  # pragma: no cover - optional dependency
+    pytesseract = None
+
+try:
+    from rapidocr_onnxruntime import RapidOCR
+except Exception:  # pragma: no cover - optional dependency
+    RapidOCR = None
+
 from .constants import (
     ANTIWORD_BIN,
     ANTIWORD_CPU_SECONDS,
@@ -25,6 +51,21 @@ from .constants import (
     EXCEL_INCLUDE_ROW_CONTEXT,
     EXCEL_TABLE_PREVIEW_ROWS,
     LOCAL_PARSE_MAX_RETRIES,
+    OCR_ENABLED,
+    OCR_ENGINE_PRIORITY,
+    OCR_IMAGE_PREPROCESS,
+    OCR_MAX_IMAGE_SIDE_PX,
+    OCR_MAX_PDF_PAGES,
+    OCR_MIN_CONFIDENCE,
+    OCR_MIN_IMAGE_SIDE_PX,
+    OCR_MIN_PDF_PAGE_TEXT_CHARS,
+    OCR_PDF_FALLBACK_ENABLED,
+    OCR_PDF_RENDER_DPI,
+    OCR_TESSERACT_BIN,
+    OCR_TESSERACT_LANG,
+    OCR_TESSERACT_OEM,
+    OCR_TESSERACT_PSM,
+    OCR_TIMEOUT_SECONDS,
     PDF_EXCLUDE_TABLE_TEXT,
     MAX_CHUNK_CHARS,
     MAX_CSV_ROWS,
@@ -42,7 +83,9 @@ from .retry import is_retryable_error
 from .text_utils import normalize_text, rows_to_markdown_table, safe_decode, strip_html_tags
 
 _LIB_VERSION_CACHE: Dict[str, str] = {}
-_BINARY_SIGNATURE_FORMATS = {"pdf", "jpeg", "png", "ole2", "ooxml", "rtf"}
+_BINARY_SIGNATURE_FORMATS = {"pdf", "jpeg", "png", "tiff", "webp", "ole2", "ooxml", "rtf"}
+_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"}
+_RAPID_OCR_ENGINE: Optional[Any] = None
 
 
 def _response(text: str, parser_error: Optional[str], parser_strategy: str) -> Dict[str, Any]:
@@ -50,7 +93,29 @@ def _response(text: str, parser_error: Optional[str], parser_strategy: str) -> D
         "text": text,
         "parser_error": parser_error,
         "parser_strategy": parser_strategy,
+        "ocr_attempted": False,
+        "ocr_used": False,
+        "ocr_engine_trace": None,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
     }
+
+
+def _with_ocr_metadata(
+    result: Dict[str, Any],
+    *,
+    attempted: bool,
+    used: bool,
+    trace: Optional[str],
+    pages: int,
+    supplement_pages: int,
+) -> Dict[str, Any]:
+    result["ocr_attempted"] = bool(attempted)
+    result["ocr_used"] = bool(used)
+    result["ocr_engine_trace"] = normalize_text(trace or "") or None
+    result["ocr_pages"] = max(0, _safe_int(pages))
+    result["ocr_supplement_pages"] = max(0, _safe_int(supplement_pages))
+    return result
 
 
 def _sanitize_error_message(message: str) -> str:
@@ -89,6 +154,10 @@ def _detect_binary_format(content: bytes) -> str:
         return "jpeg"
     if content[:4] == b"\x89PNG":
         return "png"
+    if content[:4] in {b"II*\x00", b"MM\x00*"}:
+        return "tiff"
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "webp"
     if content[:4] == b"\xd0\xcf\x11\xe0":
         return "ole2"
     if content[:4] == b"PK\x03\x04":
@@ -317,6 +386,224 @@ def _extract_pdf_text_excluding_tables(page, table_bboxes: List[tuple]) -> str:
     return _words_to_lines(filtered_words)
 
 
+def _resize_image_for_ocr(image):
+    width, height = image.size
+    if width <= 0 or height <= 0:
+        return image
+
+    min_side = min(width, height)
+    max_side = max(width, height)
+    scale = 1.0
+
+    if min_side < OCR_MIN_IMAGE_SIDE_PX:
+        scale = OCR_MIN_IMAGE_SIDE_PX / float(min_side)
+    if max_side * scale > OCR_MAX_IMAGE_SIDE_PX:
+        scale = OCR_MAX_IMAGE_SIDE_PX / float(max_side)
+
+    if abs(scale - 1.0) < 0.05:
+        return image
+
+    new_size = (
+        max(1, int(round(width * scale))),
+        max(1, int(round(height * scale))),
+    )
+    return image.resize(new_size)
+
+
+def _prepare_image_for_ocr(raw_image):
+    image = raw_image
+    if ImageOps is not None:
+        image = ImageOps.exif_transpose(image)
+
+    if image.mode not in {"L", "RGB"}:
+        image = image.convert("RGB")
+
+    if OCR_IMAGE_PREPROCESS and ImageOps is not None:
+        image = ImageOps.grayscale(image)
+        image = ImageOps.autocontrast(image)
+
+    image = _resize_image_for_ocr(image)
+    return image
+
+
+def _polygon_anchor(box: Any) -> tuple:
+    if isinstance(box, (list, tuple)) and box:
+        first_point = box[0]
+        if isinstance(first_point, (list, tuple)) and len(first_point) >= 2:
+            return float(first_point[1]), float(first_point[0])
+    return 0.0, 0.0
+
+
+def _parse_rapidocr_result(result: Any) -> tuple:
+    lines_with_anchor = []
+    scores = []
+
+    if not isinstance(result, list):
+        return "", 0.0, 0
+
+    for item in result:
+        if not isinstance(item, (list, tuple)) or len(item) < 3:
+            continue
+
+        text = normalize_text(str(item[1]))
+        if not text:
+            continue
+
+        try:
+            score = float(item[2])
+        except Exception:
+            score = 0.0
+
+        if score < OCR_MIN_CONFIDENCE:
+            continue
+
+        anchor_y, anchor_x = _polygon_anchor(item[0])
+        lines_with_anchor.append((anchor_y, anchor_x, text))
+        scores.append(score)
+
+    if not lines_with_anchor:
+        return "", 0.0, 0
+
+    lines_with_anchor.sort(key=lambda item: (item[0], item[1]))
+    ordered_lines = [line for _, _, line in lines_with_anchor]
+    avg_score = sum(scores) / len(scores) if scores else 0.0
+    return normalize_text("\n".join(ordered_lines)), avg_score, len(ordered_lines)
+
+
+def _get_rapidocr_engine() -> Optional[Any]:
+    global _RAPID_OCR_ENGINE
+
+    if RapidOCR is None:
+        return None
+    if _RAPID_OCR_ENGINE is not None:
+        return _RAPID_OCR_ENGINE
+
+    try:
+        _RAPID_OCR_ENGINE = RapidOCR()
+    except Exception:
+        _RAPID_OCR_ENGINE = None
+    return _RAPID_OCR_ENGINE
+
+
+def _resolve_tesseract_binary() -> str:
+    if os.path.isabs(OCR_TESSERACT_BIN) and os.path.exists(OCR_TESSERACT_BIN):
+        return OCR_TESSERACT_BIN
+    return shutil.which(OCR_TESSERACT_BIN) or OCR_TESSERACT_BIN
+
+
+def _ocr_with_rapidocr(image) -> tuple:
+    if np is None:
+        return "", "rapidocr:missing_numpy"
+
+    engine = _get_rapidocr_engine()
+    if engine is None:
+        return "", "rapidocr:unavailable"
+
+    try:
+        result, _ = engine(np.asarray(image))
+        text, avg_score, line_count = _parse_rapidocr_result(result)
+        if not text:
+            return "", "rapidocr:no_text"
+        return text, f"rapidocr|lines:{line_count}|avg_conf:{avg_score:.2f}"
+    except Exception as exc:
+        return "", f"rapidocr:error:{exc.__class__.__name__}"
+
+
+def _ocr_with_tesseract(image) -> tuple:
+    if pytesseract is None:
+        return "", "tesseract:module_missing"
+
+    binary = _resolve_tesseract_binary()
+    if not binary or (not os.path.exists(binary) and not shutil.which(binary)):
+        return "", "tesseract:binary_missing"
+
+    try:
+        pytesseract.pytesseract.tesseract_cmd = binary
+        config = f"--oem {OCR_TESSERACT_OEM} --psm {OCR_TESSERACT_PSM}"
+        text = pytesseract.image_to_string(
+            image,
+            lang=OCR_TESSERACT_LANG,
+            config=config,
+            timeout=OCR_TIMEOUT_SECONDS,
+        )
+        normalized = normalize_text(text)
+        if not normalized:
+            return "", "tesseract:no_text"
+        return normalized, "tesseract"
+    except Exception as exc:
+        return "", f"tesseract:error:{exc.__class__.__name__}"
+
+
+def _ocr_image_with_priority(image) -> tuple:
+    traces: List[str] = []
+    for engine in OCR_ENGINE_PRIORITY:
+        if engine == "rapidocr":
+            text, trace = _ocr_with_rapidocr(image)
+        elif engine == "tesseract":
+            text, trace = _ocr_with_tesseract(image)
+        else:
+            text, trace = "", f"{engine}:unsupported"
+
+        traces.append(trace)
+        if text:
+            return text, ";".join(traces)
+
+    return "", ";".join(traces) if traces else "ocr:no_engine"
+
+
+def _merge_native_and_ocr_text(native_text: str, ocr_text: str) -> str:
+    native = normalize_text(native_text)
+    ocr = normalize_text(ocr_text)
+
+    if not native:
+        return ocr
+    if not ocr:
+        return native
+
+    if ocr in native:
+        return native
+    if native in ocr:
+        return ocr
+
+    native_lines = {normalize_text(line) for line in native.splitlines() if normalize_text(line)}
+    ocr_lines = [normalize_text(line) for line in ocr.splitlines() if normalize_text(line)]
+    supplemental_lines = [line for line in ocr_lines if line not in native_lines]
+
+    if not supplemental_lines:
+        return native
+
+    return f"{native}\n[OCR_SUPPLEMENT]\n" + "\n".join(supplemental_lines)
+
+
+def _extract_ocr_text_from_pdf_page(pdfium_document: Any, page_index: int) -> tuple:
+    if pdfium_document is None:
+        return "", "ocr_pdf:pdfium_unavailable"
+    if Image is None:
+        return "", "ocr_pdf:pillow_unavailable"
+
+    page = None
+    bitmap = None
+    try:
+        page = pdfium_document[page_index]
+        bitmap = page.render(scale=OCR_PDF_RENDER_DPI / 72.0)
+        image = bitmap.to_pil()
+        prepared = _prepare_image_for_ocr(image)
+        return _ocr_image_with_priority(prepared)
+    except Exception as exc:
+        return "", f"ocr_pdf:error:{exc.__class__.__name__}"
+    finally:
+        try:
+            if page is not None:
+                page.close()
+        except Exception:
+            pass
+        try:
+            if bitmap is not None:
+                bitmap.close()
+        except Exception:
+            pass
+
+
 def _flatten_json(prefix: str, node: Any, out: List[str]) -> None:
     if isinstance(node, dict):
         for key, value in node.items():
@@ -420,6 +707,49 @@ def extract_text_from_textlike(content: bytes, extension: str) -> Dict[str, Any]
     return _response(decoded, None if decoded else _error("ERR_EMPTY", "Empty decoded"), strategy)
 
 
+def extract_text_from_image_ocr(content: bytes, extension: str) -> Dict[str, Any]:
+    ext = _normalize_extension(extension)
+    strategy = _with_lib_versions(
+        f"ocr_image:{ext}|engines:{','.join(OCR_ENGINE_PRIORITY)}",
+        "pillow",
+        "rapidocr-onnxruntime",
+        "pytesseract",
+    )
+
+    if not content:
+        return _response("", _error("ERR_EMPTY", "Empty"), strategy)
+    if not OCR_ENABLED:
+        return _response("", _error("ERR_OCR_DISABLED", "OCR disabled by configuration"), f"{strategy}|disabled")
+    if Image is None:
+        return _response("", _error("ERR_OCR_DEPENDENCY", "Pillow unavailable"), strategy)
+
+    try:
+        with Image.open(io.BytesIO(content)) as image_obj:
+            prepared = _prepare_image_for_ocr(image_obj.copy())
+    except Exception as exc:
+        return _response("", _error("ERR_OCR_IMAGE", str(exc)), strategy)
+
+    text, ocr_trace = _ocr_image_with_priority(prepared)
+    if text:
+        return _with_ocr_metadata(
+            _response(text, None, f"{strategy}|{ocr_trace}"),
+            attempted=True,
+            used=True,
+            trace=ocr_trace,
+            pages=1,
+            supplement_pages=1,
+        )
+
+    return _with_ocr_metadata(
+        _response("", _error("ERR_OCR_EMPTY", "No text recognized"), f"{strategy}|{ocr_trace}"),
+        attempted=True,
+        used=False,
+        trace=ocr_trace,
+        pages=0,
+        supplement_pages=0,
+    )
+
+
 def extract_text_from_pdf_pdfplumber(content: bytes, extension: str) -> Dict[str, Any]:
     ext = _normalize_extension(extension) or "pdf"
     strategy = _with_lib_versions(
@@ -432,6 +762,18 @@ def extract_text_from_pdf_pdfplumber(content: bytes, extension: str) -> Dict[str
     try:
         started_at = time.time()
         elements = []
+        pdfium_document = None
+        ocr_pages = 0
+        ocr_supplement_pages = 0
+        ocr_attempted_pages = 0
+        ocr_traces: List[str] = []
+
+        if OCR_ENABLED and OCR_PDF_FALLBACK_ENABLED and pdfium is not None:
+            try:
+                pdfium_document = pdfium.PdfDocument(content)
+            except Exception as exc:
+                strategy = f"{strategy}|ocr_pdfium_init:{exc.__class__.__name__}"
+
         with pdfplumber.open(io.BytesIO(content)) as pdf:
             total_pages = len(pdf.pages)
             page_limit_reached = total_pages > MAX_PDF_PAGES
@@ -484,6 +826,30 @@ def extract_text_from_pdf_pdfplumber(content: bytes, extension: str) -> Dict[str
                     page_text = working_page.extract_text(layout=True, x_tolerance=2, y_tolerance=2)
                     if page_text:
                         used_layout_fallback = True
+
+                native_char_count = len(normalize_text(page_text or ""))
+                should_run_ocr = (
+                    OCR_ENABLED
+                    and OCR_PDF_FALLBACK_ENABLED
+                    and page.page_number <= OCR_MAX_PDF_PAGES
+                    and native_char_count < OCR_MIN_PDF_PAGE_TEXT_CHARS
+                )
+
+                if should_run_ocr:
+                    ocr_attempted_pages += 1
+                    ocr_text, ocr_trace = _extract_ocr_text_from_pdf_page(pdfium_document, page.page_number - 1)
+                    ocr_traces.append(f"p{page.page_number}:{ocr_trace}")
+                    if ocr_text:
+                        ocr_pages += 1
+                        if page_text:
+                            merged_page_text = _merge_native_and_ocr_text(page_text, ocr_text)
+                            if merged_page_text != page_text:
+                                ocr_supplement_pages += 1
+                            page_text = merged_page_text
+                        else:
+                            page_text = ocr_text
+                            ocr_supplement_pages += 1
+
                 if page_text:
                     elements.append(page_text)
 
@@ -510,11 +876,36 @@ def extract_text_from_pdf_pdfplumber(content: bytes, extension: str) -> Dict[str
                 strategy = f"{strategy}|page_limit:{MAX_PDF_PAGES}"
             if timeout_partial:
                 strategy = f"{strategy}|timeout_partial:{last_page_processed}"
+            if OCR_ENABLED and OCR_PDF_FALLBACK_ENABLED:
+                strategy = f"{strategy}|ocr_pages:{ocr_pages}|ocr_supplement_pages:{ocr_supplement_pages}"
+                if ocr_traces:
+                    strategy = f"{strategy}|ocr_trace:{','.join(ocr_traces[:6])}"
+
+        try:
+            if pdfium_document is not None:
+                pdfium_document.close()
+        except Exception:
+            pass
 
         full_text = normalize_text("\n\n".join(elements))
+        ocr_trace_joined = ",".join(ocr_traces[:20]) if ocr_traces else None
         if not full_text and timeout_partial:
-            return _response("", _error("ERR_TIMEOUT", f"PDF parsing exceeded {PARSE_TIMEOUT_SECONDS}s"), strategy)
-        return _response(full_text, None if full_text else _error("ERR_EMPTY", "Empty PDF"), strategy)
+            return _with_ocr_metadata(
+                _response("", _error("ERR_TIMEOUT", f"PDF parsing exceeded {PARSE_TIMEOUT_SECONDS}s"), strategy),
+                attempted=ocr_attempted_pages > 0,
+                used=ocr_pages > 0,
+                trace=ocr_trace_joined,
+                pages=ocr_pages,
+                supplement_pages=ocr_supplement_pages,
+            )
+        return _with_ocr_metadata(
+            _response(full_text, None if full_text else _error("ERR_EMPTY", "Empty PDF"), strategy),
+            attempted=ocr_attempted_pages > 0,
+            used=ocr_pages > 0,
+            trace=ocr_trace_joined,
+            pages=ocr_pages,
+            supplement_pages=ocr_supplement_pages,
+        )
     except Exception as exc:
         lowered_message = str(exc).lower()
         if "password" in lowered_message or "encrypted" in lowered_message:
@@ -861,6 +1252,7 @@ def extract_text_locally(content: bytes, extension: str) -> Dict[str, Any]:
         (ext == "pdf" and detected_format not in {"pdf", "unknown"})
         or (ext in {"doc", "xls", "ppt"} and detected_format not in {"ole2", "unknown"})
         or (ext in {"docx", "xlsx", "pptx", "xlsm", "xlsb"} and detected_format not in {"ooxml", "unknown"})
+        or (ext in _IMAGE_EXTENSIONS and detected_format not in {"jpeg", "png", "tiff", "webp", "unknown"})
     )
     format_suffix = f"|signature:{detected_format}" if extension_format_mismatch else ""
 
@@ -887,8 +1279,15 @@ def extract_text_locally(content: bytes, extension: str) -> Dict[str, Any]:
         result = extract_text_from_pptx(content, ext)
         if extension_format_mismatch:
             result["parser_strategy"] = f"{result.get('parser_strategy', 'python_pptx:pptx')}{format_suffix}"
+    elif ext in _IMAGE_EXTENSIONS:
+        result = extract_text_from_image_ocr(content, ext)
+        if extension_format_mismatch:
+            result["parser_strategy"] = f"{result.get('parser_strategy', 'ocr_image')}{format_suffix}"
     elif ext in TEXTLIKE_EXTENSIONS:
         result = extract_text_from_textlike(content, ext)
+    elif detected_format in {"jpeg", "png", "tiff", "webp"}:
+        result = extract_text_from_image_ocr(content, detected_format)
+        result["parser_strategy"] = f"{result.get('parser_strategy', 'ocr_image')}|detected_format_routing"
     else:
         result = _response("", _error("ERR_UNHANDLED_EXTENSION", f"No local parser available for {ext}"), f"unhandled:{ext}")
 
