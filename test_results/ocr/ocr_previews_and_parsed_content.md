@@ -2,6 +2,7 @@
 
 - Generated on: 2026-04-20
 - Goal: visual preview of files plus extracted parsed content (OCR-aware).
+- Detailed table-focused OCR proof (PDF + DOCX, OCR ON/OFF): [ocr_table_examples_report.md](ocr_table_examples_report.md)
 
 ## 1. Synthetic image OCR sample
 

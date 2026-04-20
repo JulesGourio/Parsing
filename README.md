@@ -226,9 +226,14 @@ Les résultats ont été réorganisés dans:
 - [test_results/benchmark/benchmark_chunks_visible.html](test_results/benchmark/benchmark_chunks_visible.html)
 - [test_results/ocr/ocr_analysis_report.md](test_results/ocr/ocr_analysis_report.md)
 - [test_results/ocr/ocr_previews_and_parsed_content.md](test_results/ocr/ocr_previews_and_parsed_content.md)
+- [test_results/ocr/ocr_table_examples_report.md](test_results/ocr/ocr_table_examples_report.md)
+- [test_results/ocr/ocr_table_examples_results.json](test_results/ocr/ocr_table_examples_results.json)
 - [test_results/ocr/ocr_trace_summary.md](test_results/ocr/ocr_trace_summary.md)
 - [test_results/ocr/ocr_trace_examples.md](test_results/ocr/ocr_trace_examples.md)
 - [test_results/parsing_reports_index.md](test_results/parsing_reports_index.md)
+
+Artefacts reproductibles:
+- [scripts/generate_real_table_ocr_examples.py](scripts/generate_real_table_ocr_examples.py): génère un PDF multi-pages avec tableau image au milieu, un DOCX avec tableau image embarqué, puis un comparatif OCR ON/OFF.
 
 Fichiers obsolètes retirés:
 - benchmark_parsing_results.json

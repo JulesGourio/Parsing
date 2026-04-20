@@ -241,6 +241,43 @@ def _extract_docx_textboxes(document: Document) -> List[str]:
     return extracted
 
 
+def _collect_docx_image_blobs(document: Document) -> List[bytes]:
+    blobs: List[bytes] = []
+    seen = set()
+
+    def _collect_from_part(part: Any) -> None:
+        rels = getattr(part, "rels", {})
+        for rel in rels.values():
+            reltype = str(getattr(rel, "reltype", ""))
+            if "image" not in reltype:
+                continue
+
+            target_part = getattr(rel, "target_part", None)
+            blob = getattr(target_part, "blob", None)
+            if not blob:
+                continue
+
+            signature = (len(blob), blob[:32])
+            if signature in seen:
+                continue
+
+            seen.add(signature)
+            blobs.append(blob)
+
+    _collect_from_part(document.part)
+    for section in document.sections:
+        try:
+            _collect_from_part(section.header.part)
+        except Exception:
+            pass
+        try:
+            _collect_from_part(section.footer.part)
+        except Exception:
+            pass
+
+    return blobs
+
+
 def _extract_paragraph_with_hyperlinks(paragraph) -> str:
     rels = paragraph.part.rels
     pieces: List[str] = []
@@ -923,6 +960,9 @@ def extract_text_from_docx(content: bytes, extension: str) -> Dict[str, Any]:
         started_at = time.time()
         document = Document(io.BytesIO(content))
         elements = []
+        ocr_attempted_units = 0
+        ocr_used_units = 0
+        ocr_traces: List[str] = []
 
         for section_index, section in enumerate(document.sections, start=1):
             header_text = normalize_text("\n".join([p.text for p in section.header.paragraphs if p.text.strip()]))
@@ -970,8 +1010,49 @@ def extract_text_from_docx(content: bytes, extension: str) -> Dict[str, Any]:
             elements.append("## Textboxes")
             elements.extend([f"- {textbox}" for textbox in textboxes])
 
+        image_blobs = _collect_docx_image_blobs(document)
+        if OCR_ENABLED and image_blobs:
+            strategy = f"{strategy}|docx_images:{len(image_blobs)}"
+            ocr_attempted_units = len(image_blobs)
+
+            if Image is None:
+                ocr_traces.append("docx_images:pillow_unavailable")
+                strategy = f"{strategy}|ocr_dependency_missing:pillow"
+            else:
+                ocr_sections = []
+                for image_index, blob in enumerate(image_blobs, start=1):
+                    try:
+                        with Image.open(io.BytesIO(blob)) as image_obj:
+                            prepared = _prepare_image_for_ocr(image_obj.copy())
+                    except Exception as exc:
+                        ocr_traces.append(f"img{image_index}:decode_error:{exc.__class__.__name__}")
+                        continue
+
+                    ocr_text, ocr_trace = _ocr_image_with_priority(prepared)
+                    ocr_traces.append(f"img{image_index}:{ocr_trace}")
+                    if not ocr_text:
+                        continue
+
+                    ocr_used_units += 1
+                    ocr_sections.append(f"### Embedded image {image_index}\n{ocr_text}")
+
+                if ocr_sections:
+                    elements.append("## OCR embedded images")
+                    elements.extend(ocr_sections)
+
+            strategy = f"{strategy}|ocr_embedded_images:{ocr_used_units}/{len(image_blobs)}"
+            if ocr_traces:
+                strategy = f"{strategy}|ocr_trace:{','.join(ocr_traces[:6])}"
+
         full_text = normalize_text("\n\n".join(elements))
-        return _response(full_text, None if full_text else _error("ERR_EMPTY", "Empty Docx"), strategy)
+        return _with_ocr_metadata(
+            _response(full_text, None if full_text else _error("ERR_EMPTY", "Empty Docx"), strategy),
+            attempted=ocr_attempted_units > 0,
+            used=ocr_used_units > 0,
+            trace=",".join(ocr_traces[:20]) if ocr_traces else None,
+            pages=ocr_used_units,
+            supplement_pages=ocr_used_units,
+        )
     except Exception as exc:
         return _response("", _error("ERR_DOCX", str(exc)), strategy)
 
