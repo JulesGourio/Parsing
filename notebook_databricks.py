@@ -3,6 +3,7 @@
 
 # COMMAND ----------
 import uuid
+import os
 from itertools import chain
 
 from pyspark.sql import functions as F
@@ -15,6 +16,24 @@ from utils import *
 spark.conf.set("spark.sql.files.maxPartitionBytes", "134217728")
 spark.conf.set("spark.sql.files.openCostInBytes", "134217728")
 spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+
+# OCR runtime toggles (driver + executors)
+# These values can be overridden by cluster/job environment variables.
+OCR_RUNTIME_ENV = {
+    "OCR_ENABLED": os.getenv("OCR_ENABLED", "1"),
+    "OCR_PDF_FALLBACK_ENABLED": os.getenv("OCR_PDF_FALLBACK_ENABLED", "1"),
+    "OCR_ENGINE_PRIORITY": os.getenv("OCR_ENGINE_PRIORITY", "rapidocr,tesseract"),
+    "OCR_MIN_PDF_PAGE_TEXT_CHARS": os.getenv("OCR_MIN_PDF_PAGE_TEXT_CHARS", "80"),
+    "OCR_PDF_RENDER_DPI": os.getenv("OCR_PDF_RENDER_DPI", "220"),
+}
+
+for env_name, env_value in OCR_RUNTIME_ENV.items():
+    os.environ[env_name] = str(env_value)
+    spark.conf.set(f"spark.executorEnv.{env_name}", str(env_value))
+
+print("OCR runtime configuration:")
+for env_name, env_value in OCR_RUNTIME_ENV.items():
+    print(f"- {env_name}={env_value}")
 
 VOLUME_ROOT_PATH = "/Volumes/dev_landingzone/intraqual/intraqual_documents"
 TARGET_PROCESSED_FILES_TABLE = "dev_lab.lab_jules.processed_files"

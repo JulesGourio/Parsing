@@ -121,6 +121,38 @@ Variables parsing global:
 - ANTIWORD_CPU_SECONDS
 - ANTIWORD_MEMORY_MB
 
+## Combinaison OCR + parsing (comment ça s’intègre)
+
+L’OCR ne remplace pas le parsing existant, il le complète:
+- Images (png/jpg/jpeg/tiff/bmp/webp): extraction OCR directe.
+- PDF natifs: extraction texte standard d’abord, puis OCR sélectif uniquement sur les pages trop pauvres en texte.
+- Fusion: le texte OCR est fusionné en supplément du texte natif quand utile, pour éviter de perdre l’info déjà bien extraite.
+- Autres formats (docx/xlsx/pptx/csv/json/html…): inchangés, pipeline standard.
+
+Concrètement, le flux reste unique (`extract_text_locally`), et la stratégie OCR est activée conditionnellement selon le type de fichier et les seuils configurés.
+
+## Activation / désactivation OCR
+
+### Désactiver tout OCR
+
+```bash
+export OCR_ENABLED=0
+```
+
+### Laisser OCR image mais désactiver fallback OCR sur PDF
+
+```bash
+export OCR_ENABLED=1
+export OCR_PDF_FALLBACK_ENABLED=0
+```
+
+### Réactiver OCR complet
+
+```bash
+export OCR_ENABLED=1
+export OCR_PDF_FALLBACK_ENABLED=1
+```
+
 Exemple:
 
 ```bash
@@ -161,6 +193,30 @@ Import pratique:
 from parsing_core import extract_local_text_udf, build_chunks_udf, token_count_udf
 ```
 
+## Notebook Databricks: alignement OCR
+
+Oui, le notebook est aligné avec ce fonctionnement:
+- il consomme `extract_local_text_udf`, donc le même parseur local (et les mêmes règles OCR),
+- il expose/persiste les champs OCR structurés (`ocr_attempted`, `ocr_used`, `ocr_engine_trace`, `ocr_pages`, `ocr_supplement_pages`) dans `processed_files`,
+- il pousse les flags OCR vers les exécuteurs via `spark.executorEnv.*` pour garantir la cohérence driver/executor.
+
+Fichier concerné: [notebook_databricks.py](notebook_databricks.py)
+
+## Dimensionnement VM recommandé
+
+Le besoin dépend surtout du ratio de PDF scannés/images (OCR coûteux CPU).
+
+| Profil | Usage | vCPU | RAM | Disque | Remarques |
+|---|---|---:|---:|---:|---|
+| Dev / POC | tests fonctionnels, petits lots | 4 | 16 Go | 100 Go SSD | suffisant pour validation rapide |
+| Standard prod | lots moyens, mix natif + OCR | 8 | 32 Go | 200 Go SSD | profil recommandé par défaut |
+| OCR intensif | beaucoup de scans/PDF image | 16 | 64 Go | 400+ Go SSD | réduit fortement le temps de traitement |
+
+Notes:
+- GPU non requis (RapidOCR fonctionne en CPU),
+- privilégier SSD local pour les I/O temporaires,
+- ajuster `MAX_*` (pages/lignes/taille doc) pour maîtriser latence et mémoire.
+
 ## Résultats de tests et organisation
 
 Les résultats ont été réorganisés dans:
@@ -172,6 +228,7 @@ Les résultats ont été réorganisés dans:
 - [test_results/ocr/ocr_previews_and_parsed_content.md](test_results/ocr/ocr_previews_and_parsed_content.md)
 - [test_results/ocr/ocr_trace_summary.md](test_results/ocr/ocr_trace_summary.md)
 - [test_results/ocr/ocr_trace_examples.md](test_results/ocr/ocr_trace_examples.md)
+- [test_results/parsing_reports_index.md](test_results/parsing_reports_index.md)
 
 Fichiers obsolètes retirés:
 - benchmark_parsing_results.json
