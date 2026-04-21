@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Run OCR ON/OFF parsing on a directory and generate readable reports.
+"""Run OCR ON/OFF evaluation on a folder with full-text and full-chunk outputs.
 
-This script parses every supported file twice:
-1) OCR enabled
-2) OCR disabled
+This script parses each supported file twice:
+1) OCR ON
+2) OCR OFF
 
-It then computes quality diagnostics (with extra focus on table reconstruction)
-and writes consolidated outputs:
-- JSON payload for automation
-- Markdown report for quick review
-- HTML report for business-friendly browsing
+It then chunks both full texts and writes complete artifacts without previews:
+- full_results.json (full text + full chunk payload per file)
+- chunks_ocr_on.jsonl / chunks_ocr_off.jsonl (flat chunk-level datasets)
+- documents_ocr_on/*.txt / documents_ocr_off/*.txt (full extracted text)
+- full_report.md (human-readable full report)
+- full_report.html (browser view with full texts/chunks)
 """
 
 from __future__ import annotations
@@ -18,7 +19,6 @@ import argparse
 import html
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -27,9 +27,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List
 
+from parsing_core.chunking import split_text_to_chunks
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT_DIR = ROOT / "test_results" / "ocr_comparison"
+DEFAULT_OUTPUT_DIR = ROOT / "test_results" / "ocr_full_evaluation"
 
 SUPPORTED_EXTENSIONS = {
     "pdf",
@@ -59,94 +60,6 @@ SUPPORTED_EXTENSIONS = {
     "webp",
 }
 
-TABLE_NATIVE_EXTENSIONS = {"xls", "xlsx", "xlsm", "xlsb", "csv", "tsv"}
-SEMI_TABLE_EXTENSIONS = {"pdf", "docx", "docm", "pptx", "json", "xml", "html", "htm", "md"}
-
-TABLE_MARKER_RE = re.compile(r"\[TABLE_START\]", re.IGNORECASE)
-DIAGRAM_MARKER_RE = re.compile(r"\[DIAGRAM_START\]", re.IGNORECASE)
-TABLE_HINT_RE = re.compile(
-    r"\b(table|tableau|qte|qty|item|prix|price|total|montant|amount|colonne|column)\b",
-    re.IGNORECASE,
-)
-
-DEPENDENCY_ERROR_MARKERS = (
-    "err_antiword_bin",
-    "antiword",
-    "utf-8.txt",
-    "mapping file",
-    "module not found",
-    "modulenotfounderror",
-    "no module named",
-    "command not found",
-    "cannot find",
-    "is not installed",
-    "dependency",
-)
-
-
-def _classify_parser_error(error_text: str) -> str:
-    lowered = (error_text or "").strip().lower()
-    if not lowered:
-        return "none"
-    if "timeout" in lowered:
-        return "timeout"
-    if any(marker in lowered for marker in DEPENDENCY_ERROR_MARKERS):
-        return "dependency"
-    if lowered.startswith("subprocess_error"):
-        return "runtime"
-    return "parser"
-
-
-def _table_check_status(
-    extension: str,
-    parser_error_kind: str,
-    table_markers: int,
-    table_hints: int,
-) -> Dict[str, str]:
-    if extension in TABLE_NATIVE_EXTENSIONS:
-        if parser_error_kind not in {"none", "dependency"}:
-            return {
-                "status": "blocked",
-                "expectation": "required",
-                "reason": "Tabular format but parser failed before table validation.",
-            }
-        if table_markers > 0:
-            return {
-                "status": "pass",
-                "expectation": "required",
-                "reason": "Expected [TABLE_START] marker found for tabular input.",
-            }
-        return {
-            "status": "fail",
-            "expectation": "required",
-            "reason": "Tabular format without [TABLE_START] marker.",
-        }
-
-    if extension in SEMI_TABLE_EXTENSIONS and table_hints >= 4:
-        if parser_error_kind not in {"none", "dependency"}:
-            return {
-                "status": "blocked",
-                "expectation": "hint_based",
-                "reason": "Strong table hints present but parser failed before validation.",
-            }
-        if table_markers > 0:
-            return {
-                "status": "pass",
-                "expectation": "hint_based",
-                "reason": "Table hints and table marker detected.",
-            }
-        return {
-            "status": "warn",
-            "expectation": "hint_based",
-            "reason": "Table hints detected but no [TABLE_START] marker.",
-        }
-
-    return {
-        "status": "n/a",
-        "expectation": "none",
-        "reason": "No strong table expectation for this file type.",
-    }
-
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -162,10 +75,9 @@ def _collect_input_files(input_dir: Path, extensions: set[str]) -> List[Path]:
     for path in input_dir.rglob("*"):
         if not path.is_file():
             continue
-        ext = _normalize_extension(path)
-        if ext in extensions:
+        if _normalize_extension(path) in extensions:
             files.append(path)
-    files.sort(key=lambda p: str(p).lower())
+    files.sort(key=lambda item: str(item).lower())
     return files
 
 
@@ -174,36 +86,6 @@ def _to_relative(path: Path) -> str:
         return str(path.relative_to(ROOT))
     except Exception:
         return str(path)
-
-
-def _safe_preview(text: str, max_chars: int = 360) -> str:
-    cleaned = (text or "").replace("\r", "")
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
-    if len(cleaned) <= max_chars:
-        return cleaned
-    return f"{cleaned[:max_chars]}\n... [truncated]"
-
-
-def _table_excerpt(text: str, max_lines: int = 22) -> str:
-    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
-    if not lines:
-        return "[empty]"
-
-    hits: List[int] = []
-    for index, line in enumerate(lines):
-        if TABLE_MARKER_RE.search(line) or TABLE_HINT_RE.search(line):
-            hits.append(index)
-
-    if not hits:
-        return "\n".join(lines[:max_lines])
-
-    selected = set()
-    for hit in hits:
-        for idx in range(max(0, hit - 2), min(len(lines), hit + 3)):
-            selected.add(idx)
-
-    merged = [lines[idx] for idx in sorted(selected)]
-    return "\n".join(merged[:max_lines])
 
 
 def _run_single_parse(path: Path, extension: str, ocr_enabled: bool) -> Dict[str, object]:
@@ -250,8 +132,8 @@ def _run_single_parse(path: Path, extension: str, ocr_enabled: bool) -> Dict[str
             "ocr_pages": 0,
             "ocr_supplement_pages": 0,
             "_token_count": 0,
-            "_stderr": process.stderr[-3000:],
-            "_stdout": process.stdout[-3000:],
+            "_stderr": process.stderr[-5000:],
+            "_stdout": process.stdout[-5000:],
         }
 
     lines = [line for line in process.stdout.splitlines() if line.strip()]
@@ -267,8 +149,8 @@ def _run_single_parse(path: Path, extension: str, ocr_enabled: bool) -> Dict[str
             "ocr_pages": 0,
             "ocr_supplement_pages": 0,
             "_token_count": 0,
-            "_stderr": process.stderr[-3000:],
-            "_stdout": process.stdout[-3000:],
+            "_stderr": process.stderr[-5000:],
+            "_stdout": process.stdout[-5000:],
         }
 
     try:
@@ -285,108 +167,44 @@ def _run_single_parse(path: Path, extension: str, ocr_enabled: bool) -> Dict[str
             "ocr_pages": 0,
             "ocr_supplement_pages": 0,
             "_token_count": 0,
-            "_stderr": process.stderr[-3000:],
-            "_stdout": process.stdout[-3000:],
+            "_stderr": process.stderr[-5000:],
+            "_stdout": process.stdout[-5000:],
         }
 
 
-def _compute_text_metrics(result: Dict[str, object]) -> Dict[str, object]:
-    text = str(result.get("text") or "")
-    table_markers = len(TABLE_MARKER_RE.findall(text))
-    diagram_markers = len(DIAGRAM_MARKER_RE.findall(text))
-    table_hints = len(TABLE_HINT_RE.findall(text))
-
-    return {
-        "chars": len(text),
-        "tokens": int(result.get("_token_count") or 0),
-        "table_markers": table_markers,
-        "diagram_markers": diagram_markers,
-        "table_hints": table_hints,
-        "empty": len(text.strip()) == 0,
-    }
-
-
-def _evaluate_quality(
-    extension: str,
-    ocr_on: Dict[str, object],
-    ocr_off: Dict[str, object],
-    on_metrics: Dict[str, object],
-    off_metrics: Dict[str, object],
-) -> Dict[str, object]:
-    issues: List[str] = []
-    warnings: List[str] = []
-
-    on_error = str(ocr_on.get("parser_error") or "").strip()
-    off_error = str(ocr_off.get("parser_error") or "").strip()
-    on_error_kind = _classify_parser_error(on_error)
-    off_error_kind = _classify_parser_error(off_error)
-
-    on_strategy = str(ocr_on.get("parser_strategy") or "")
-    on_timeout_partial = "timeout_partial" in on_strategy
-    on_ocr_budget_limited = "ocr_attempt_budget:" in on_strategy or "ocr_time_budget_ratio:" in on_strategy
-
-    if on_error:
-        if on_error_kind == "dependency":
-            warnings.append(f"OCR ON dependency/toolchain issue: {on_error}")
-        else:
-            issues.append(f"OCR ON parser error: {on_error}")
-    if off_error:
-        if off_error_kind == "dependency":
-            warnings.append(f"OCR OFF dependency/toolchain issue: {off_error}")
-        else:
-            warnings.append(f"OCR OFF parser error: {off_error}")
-
-    if bool(on_metrics.get("empty")) and not on_error:
-        issues.append("OCR ON output is empty")
-
-    on_tables = int(on_metrics.get("table_markers") or 0)
-    on_hints = int(on_metrics.get("table_hints") or 0)
-    table_check = _table_check_status(extension, on_error_kind, on_tables, on_hints)
-
-    if table_check["status"] == "fail" and on_error_kind in {"none", "dependency"}:
-        issues.append(table_check["reason"])
-    elif table_check["status"] == "warn":
-        warnings.append(table_check["reason"])
-
-    on_chars = int(on_metrics.get("chars") or 0)
-    off_chars = int(off_metrics.get("chars") or 0)
-    if (
-        off_chars > 0
-        and on_chars < int(round(off_chars * 0.85))
-        and not on_error
-        and not on_timeout_partial
-    ):
-        if on_ocr_budget_limited:
-            warnings.append("OCR ON text length lower than OCR OFF (OCR budget limited for performance)")
-        else:
-            warnings.append("OCR ON text length significantly lower than OCR OFF")
-
-    off_tables = int(off_metrics.get("table_markers") or 0)
-    if on_tables < off_tables and not on_timeout_partial:
-        if on_ocr_budget_limited:
-            warnings.append("OCR ON has fewer table markers than OCR OFF (OCR budget limited for performance)")
-        else:
-            warnings.append("OCR ON has fewer table markers than OCR OFF")
-
-    severity = "ok"
-    if issues:
-        severity = "error"
-    elif warnings:
-        severity = "warning"
-
-    return {
-        "severity": severity,
-        "issues": issues,
-        "warnings": warnings,
-        "chars_gain": on_chars - off_chars,
-        "table_gain": on_tables - off_tables,
-        "on_error_kind": on_error_kind,
-        "off_error_kind": off_error_kind,
-        "table_check": table_check,
-    }
+def _build_chunks_payload(
+    text: str,
+    chunk_size_tokens: int,
+    chunk_overlap_tokens: int,
+    min_chunk_tokens: int,
+    max_chunk_tokens: int,
+) -> List[Dict[str, object]]:
+    max_limit = max_chunk_tokens if max_chunk_tokens > 0 else None
+    chunks = split_text_to_chunks(
+        text=text,
+        chunk_size_tokens=chunk_size_tokens,
+        chunk_overlap_tokens=chunk_overlap_tokens,
+        min_chunk_tokens=min_chunk_tokens,
+        max_chunk_tokens=max_limit,
+    )
+    formatted: List[Dict[str, object]] = []
+    for chunk in chunks:
+        formatted.append(
+            {
+                "chunk_index": int(chunk.get("chunk_index") or 0),
+                "chunk_stable_id": chunk.get("chunk_stable_id"),
+                "chunk_content_type": chunk.get("chunk_content_type"),
+                "chunk_char_count": int(chunk.get("chunk_char_count") or 0),
+                "chunk_token_count": int(chunk.get("chunk_token_count") or 0),
+                "metadata": chunk.get("metadata") or {},
+                "chunk_text": str(chunk.get("chunk_text") or ""),
+            }
+        )
+    return formatted
 
 
-def _format_short_mode_payload(result: Dict[str, object], metrics: Dict[str, object], preview: str) -> Dict[str, object]:
+def _base_mode_payload(result: Dict[str, object], chunks: List[Dict[str, object]]) -> Dict[str, object]:
+    text_value = str(result.get("text") or "")
     return {
         "parser_strategy": result.get("parser_strategy"),
         "parser_error": result.get("parser_error"),
@@ -396,328 +214,185 @@ def _format_short_mode_payload(result: Dict[str, object], metrics: Dict[str, obj
         "ocr_engine_trace": result.get("ocr_engine_trace"),
         "ocr_pages": result.get("ocr_pages"),
         "ocr_supplement_pages": result.get("ocr_supplement_pages"),
-        "chars": metrics.get("chars"),
-        "tokens": metrics.get("tokens"),
-        "table_markers": metrics.get("table_markers"),
-        "diagram_markers": metrics.get("diagram_markers"),
-        "table_hints": metrics.get("table_hints"),
-        "preview": preview,
+        "text": text_value,
+        "text_char_count": len(text_value),
+        "text_token_count": int(result.get("_token_count") or 0),
+        "chunk_count": len(chunks),
+        "chunks": chunks,
     }
 
 
-def _build_markdown_report(payload: Dict[str, object]) -> str:
-    run = payload["run"]
-    stats = payload["stats"]
-    files = payload["files"]
-    table_status_counts = {"pass": 0, "warn": 0, "fail": 0, "blocked": 0, "n/a": 0}
+def _write_full_text_file(base_dir: Path, relative_path: str, text: str) -> Path:
+    target = base_dir / Path(relative_path)
+    target = target.with_suffix(target.suffix + ".txt") if target.suffix else Path(str(target) + ".txt")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    return target
 
-    for entry in files:
-        status = str(entry["quality"].get("table_check", {}).get("status", "n/a"))
-        table_status_counts[status] = table_status_counts.get(status, 0) + 1
 
-    lines: List[str] = []
-    lines.append("# OCR ON/OFF Folder Parsing Report")
-    lines.append("")
-    lines.append(f"- Generated at: {run['generated_at']}")
-    lines.append(f"- Input directory: {run['input_dir']}")
-    lines.append(f"- Supported extensions: {', '.join(run['extensions'])}")
-    lines.append(f"- Total files: {stats['total_files']}")
-    lines.append(f"- Files with errors: {stats['error_files']}")
-    lines.append(f"- Files with warnings: {stats['warning_files']}")
-    lines.append(f"- Files with dependency/toolchain issues: {stats['dependency_issue_files']}")
-    lines.append(f"- OCR ON parsed with ocr_used=True: {stats['ocr_used_files']}")
-    lines.append(f"- Files with table marker improvement (ON > OFF): {stats['table_gain_files']}")
-    lines.append("")
-
-    lines.append("## Priority Findings")
-    lines.append("")
-    findings_count = 0
-    for entry in files:
-        quality = entry["quality"]
-        issues = quality["issues"]
-        warnings = quality["warnings"]
-        if not issues and not warnings:
-            continue
-
-        findings_count += 1
-        severity = quality["severity"].upper()
-        lines.append(f"### [{severity}] {entry['relative_path']}")
-        lines.append("")
-        if issues:
-            lines.append("Issues:")
-            for issue in issues:
-                lines.append(f"- {issue}")
-        if warnings:
-            lines.append("Warnings:")
-            for warning in warnings:
-                lines.append(f"- {warning}")
-        lines.append("")
-        if findings_count >= 30:
-            lines.append("- Additional findings exist in JSON/HTML reports.")
-            lines.append("")
-            break
-
-    if findings_count == 0:
-        lines.append("No critical findings detected. Residual risk remains for files without explicit table markers but with weak tabular hints.")
-        lines.append("")
-
-    lines.append("## Table Quality Overview")
-    lines.append("")
-    lines.append(f"- Table check pass: {table_status_counts.get('pass', 0)}")
-    lines.append(f"- Table check warn: {table_status_counts.get('warn', 0)}")
-    lines.append(f"- Table check fail: {table_status_counts.get('fail', 0)}")
-    lines.append(f"- Table check blocked: {table_status_counts.get('blocked', 0)}")
-    lines.append(f"- Table check n/a: {table_status_counts.get('n/a', 0)}")
-    lines.append("")
-
-    lines.append("## File Summary")
-    lines.append("")
-    lines.append("| File | Ext | Severity | Table Check | OCR Used | Chars ON | Chars OFF | Table Gain |")
-    lines.append("|---|---|---|---|---:|---:|---:|---:|")
-    for entry in files:
-        lines.append(
-            "| {path} | {ext} | {sev} | {table_check} | {ocr_used} | {on_chars} | {off_chars} | {table_gain} |".format(
-                path=entry["relative_path"],
-                ext=entry["extension"],
-                sev=entry["quality"]["severity"],
-                table_check=entry["quality"].get("table_check", {}).get("status", "n/a"),
-                ocr_used="yes" if entry["ocr_on"]["ocr_used"] else "no",
-                on_chars=entry["ocr_on"]["chars"],
-                off_chars=entry["ocr_off"]["chars"],
-                table_gain=entry["quality"]["table_gain"],
-            )
-        )
-    lines.append("")
-
-    lines.append("## Per-file Details")
-    lines.append("")
-    for entry in files:
-        lines.append(f"### {entry['relative_path']}")
-        lines.append("")
-        lines.append(f"- Extension: {entry['extension']}")
-        lines.append(f"- Size bytes: {entry['size_bytes']}")
-        lines.append(f"- Quality severity: {entry['quality']['severity']}")
-        lines.append(f"- Chars gain (ON - OFF): {entry['quality']['chars_gain']}")
-        lines.append(f"- Table gain (ON - OFF): {entry['quality']['table_gain']}")
-        lines.append(f"- OCR ON error kind: {entry['quality']['on_error_kind']}")
-        lines.append(f"- OCR OFF error kind: {entry['quality']['off_error_kind']}")
-        lines.append(f"- Table check status: {entry['quality']['table_check']['status']}")
-        lines.append(f"- Table check reason: {entry['quality']['table_check']['reason']}")
-        lines.append("")
-        lines.append("OCR ON preview:")
-        lines.append("")
-        lines.append("```text")
-        lines.append(entry["ocr_on"]["preview"])
-        lines.append("```")
-        lines.append("")
-        lines.append("OCR OFF preview:")
-        lines.append("")
-        lines.append("```text")
-        lines.append(entry["ocr_off"]["preview"])
-        lines.append("```")
-        lines.append("")
-
-    return "\n".join(lines)
+def _flatten_chunks_for_jsonl(file_entry: Dict[str, object], mode: str) -> Iterable[Dict[str, object]]:
+    mode_payload = file_entry[mode]
+    for chunk in mode_payload["chunks"]:
+        yield {
+            "file": file_entry["relative_path"],
+            "extension": file_entry["extension"],
+            "size_bytes": file_entry["size_bytes"],
+            "mode": "ocr_on" if mode == "ocr_on" else "ocr_off",
+            "chunk_index": chunk["chunk_index"],
+            "chunk_stable_id": chunk["chunk_stable_id"],
+            "chunk_content_type": chunk["chunk_content_type"],
+            "chunk_char_count": chunk["chunk_char_count"],
+            "chunk_token_count": chunk["chunk_token_count"],
+            "metadata": chunk["metadata"],
+            "chunk_text": chunk["chunk_text"],
+        }
 
 
 def _html_escape(value: object) -> str:
     return html.escape(str(value if value is not None else ""))
 
 
+def _build_html_chunks(chunks: List[Dict[str, object]]) -> str:
+    blocks = []
+    for chunk in chunks:
+        blocks.append(
+            "<details class='chunk'><summary>"
+            f"Chunk #{_html_escape(chunk['chunk_index'])} | "
+            f"tokens={_html_escape(chunk['chunk_token_count'])} | "
+            f"chars={_html_escape(chunk['chunk_char_count'])} | "
+            f"type={_html_escape(chunk['chunk_content_type'])}"
+            "</summary>"
+            f"<pre>{_html_escape(chunk['chunk_text'])}</pre>"
+            "</details>"
+        )
+    return "".join(blocks) if blocks else "<p>No chunks generated.</p>"
+
+
 def _build_html_report(payload: Dict[str, object]) -> str:
     run = payload["run"]
     stats = payload["stats"]
     files = payload["files"]
-    table_status_counts = {"pass": 0, "warn": 0, "fail": 0, "blocked": 0, "n/a": 0}
 
-    for entry in files:
-        status = str(entry["quality"].get("table_check", {}).get("status", "n/a"))
-        table_status_counts[status] = table_status_counts.get(status, 0) + 1
-
-    top_findings = [entry for entry in files if entry["quality"]["severity"] != "ok"][:8]
-    top_finding_items = []
-    for entry in top_findings:
-        notes = list(entry["quality"].get("issues") or []) + list(entry["quality"].get("warnings") or [])
-        note = notes[0] if notes else "Review details"
-        top_finding_items.append(
-            "<li><strong>{path}</strong> ({sev}) - {note}</li>".format(
-                path=_html_escape(entry["relative_path"]),
-                sev=_html_escape(entry["quality"]["severity"]),
-                note=_html_escape(note),
-            )
+    summary_rows = []
+    for item in files:
+        summary_rows.append(
+            "<tr>"
+            f"<td>{_html_escape(item['relative_path'])}</td>"
+            f"<td>{_html_escape(item['extension'])}</td>"
+            f"<td>{_html_escape(item['ocr_on']['text_char_count'])}</td>"
+            f"<td>{_html_escape(item['ocr_off']['text_char_count'])}</td>"
+            f"<td>{_html_escape(item['ocr_on']['chunk_count'])}</td>"
+            f"<td>{_html_escape(item['ocr_off']['chunk_count'])}</td>"
+            f"<td>{'yes' if item['ocr_on']['ocr_used'] else 'no'}</td>"
+            "</tr>"
         )
 
-    top_finding_html = "".join(top_finding_items) if top_finding_items else "<li>No critical finding in this run.</li>"
-
-    rows = []
-    for entry in files:
-        severity = entry["quality"]["severity"]
-        table_check = entry["quality"].get("table_check", {}).get("status", "n/a")
-        cls = f"sev-{severity}"
-        rows.append(
-            "<tr class='{cls}'>"
-            "<td>{path}</td>"
-            "<td>{ext}</td>"
-            "<td>{severity}</td>"
-            "<td>{table_check}</td>"
-            "<td>{ocr_used}</td>"
-            "<td>{on_chars}</td>"
-            "<td>{off_chars}</td>"
-            "<td>{chars_gain}</td>"
-            "<td>{table_gain}</td>"
-            "<td>{issues}</td>"
-            "<td>{warnings}</td>"
-            "</tr>".format(
-                cls=_html_escape(cls),
-                path=_html_escape(entry["relative_path"]),
-                ext=_html_escape(entry["extension"]),
-                severity=_html_escape(severity),
-                table_check=_html_escape(table_check),
-                ocr_used="yes" if entry["ocr_on"]["ocr_used"] else "no",
-                on_chars=_html_escape(entry["ocr_on"]["chars"]),
-                off_chars=_html_escape(entry["ocr_off"]["chars"]),
-                chars_gain=_html_escape(entry["quality"]["chars_gain"]),
-                table_gain=_html_escape(entry["quality"]["table_gain"]),
-                issues=_html_escape(" | ".join(entry["quality"]["issues"]) or "-"),
-                warnings=_html_escape(" | ".join(entry["quality"]["warnings"]) or "-"),
-            )
-        )
-
-    details_blocks = []
-    for entry in files:
-        details_blocks.append(
-            "<details><summary>{path} ({sev})</summary>"
-            "<p><strong>Table check:</strong> {table_check} - {table_reason}</p>"
-            "<div class='detail-grid'>"
-            "<div><h4>OCR ON</h4><pre>{on_preview}</pre></div>"
-            "<div><h4>OCR OFF</h4><pre>{off_preview}</pre></div>"
+    detail_blocks = []
+    for item in files:
+        detail_blocks.append(
+            "<section class='file'>"
+            f"<h3>{_html_escape(item['relative_path'])}</h3>"
+            "<div class='meta'>"
+            f"<p><strong>Extension:</strong> {_html_escape(item['extension'])}</p>"
+            f"<p><strong>Size bytes:</strong> {_html_escape(item['size_bytes'])}</p>"
             "</div>"
-            "</details>".format(
-                path=_html_escape(entry["relative_path"]),
-                sev=_html_escape(entry["quality"]["severity"]),
-                table_check=_html_escape(entry["quality"].get("table_check", {}).get("status", "n/a")),
-                table_reason=_html_escape(entry["quality"].get("table_check", {}).get("reason", "")),
-                on_preview=_html_escape(entry["ocr_on"]["preview"]),
-                off_preview=_html_escape(entry["ocr_off"]["preview"]),
-            )
+            "<div class='split'>"
+            "<div class='panel'>"
+            "<h4>OCR ON - full document text</h4>"
+            f"<pre>{_html_escape(item['ocr_on']['text'])}</pre>"
+            "<h4>OCR ON - full chunk list</h4>"
+            f"{_build_html_chunks(item['ocr_on']['chunks'])}"
+            "</div>"
+            "<div class='panel'>"
+            "<h4>OCR OFF - full document text</h4>"
+            f"<pre>{_html_escape(item['ocr_off']['text'])}</pre>"
+            "<h4>OCR OFF - full chunk list</h4>"
+            f"{_build_html_chunks(item['ocr_off']['chunks'])}"
+            "</div>"
+            "</div>"
+            "</section>"
         )
 
     return f"""<!doctype html>
-<html lang="en">
+<html lang=\"en\">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OCR ON/OFF Folder Parsing Report</title>
+  <meta charset=\"utf-8\" />
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+  <title>OCR Full Evaluation</title>
   <style>
     :root {{
-      --bg: #f6f7f4;
+      --bg: #f5f6f3;
+      --ink: #1b2320;
+      --line: #d7ddd9;
       --panel: #ffffff;
-      --ink: #1a1f1d;
-      --muted: #5a6763;
-      --ok: #1f7a4c;
-      --warn: #9a6b00;
-      --err: #b42318;
-      --line: #d9dfdc;
       --accent: #0b5d8f;
     }}
     body {{
       margin: 0;
-      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-      background: linear-gradient(165deg, #f7f9f5 0%, #eef2ec 100%);
+      background: var(--bg);
       color: var(--ink);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
     }}
-    .wrap {{
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 20px;
-    }}
-    .card {{
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 4px 14px rgba(17, 24, 39, 0.06);
-      margin-bottom: 16px;
-    }}
-    h1, h2 {{ margin: 0 0 10px 0; }}
-    .meta {{ color: var(--muted); font-size: 0.95rem; }}
-    .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }}
-    .stat {{ background: #f8fbfd; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }}
-    .stat .k {{ color: var(--muted); font-size: 0.85rem; }}
-    .stat .v {{ font-size: 1.4rem; font-weight: 700; }}
-    ul.top {{ margin: 6px 0 0 18px; }}
-    ul.top li {{ margin: 4px 0; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 0.92rem; }}
+    .wrap {{ max-width: 1440px; margin: 0 auto; padding: 20px; }}
+    .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }}
+    h1, h2, h3, h4 {{ margin: 0 0 10px 0; }}
+    .meta p {{ margin: 4px 0; }}
+    table {{ width: 100%; border-collapse: collapse; }}
     th, td {{ border: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }}
-    th {{ background: #edf3f8; }}
-    .sev-ok td:nth-child(3) {{ color: var(--ok); font-weight: 700; }}
-    .sev-warning td:nth-child(3) {{ color: var(--warn); font-weight: 700; }}
-    .sev-error td:nth-child(3) {{ color: var(--err); font-weight: 700; }}
-    details {{ border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 10px; background: #fff; }}
-    summary {{ cursor: pointer; font-weight: 700; color: var(--accent); }}
-    .detail-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }}
-    pre {{ white-space: pre-wrap; background: #f8f8f8; border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-height: 280px; overflow: auto; }}
-    @media (max-width: 900px) {{
-      .detail-grid {{ grid-template-columns: 1fr; }}
-      table {{ display: block; overflow-x: auto; }}
+    th {{ background: #ecf3f8; }}
+    .split {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
+    .panel {{ border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #fff; }}
+    pre {{ white-space: pre-wrap; background: #f8f8f8; border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-wrap: anywhere; }}
+    details.chunk {{ margin-bottom: 8px; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: #fcfcfc; }}
+    summary {{ cursor: pointer; color: var(--accent); font-weight: 600; }}
+    @media (max-width: 980px) {{
+      .split {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <section class="card">
-      <h1>OCR ON/OFF Folder Parsing Report</h1>
-      <p class="meta">Generated at: {_html_escape(run['generated_at'])}</p>
-      <p class="meta">Input: {_html_escape(run['input_dir'])}</p>
-      <p class="meta">Extensions: {_html_escape(', '.join(run['extensions']))}</p>
+  <div class=\"wrap\">
+    <section class=\"card\">
+      <h1>OCR Full Evaluation Report</h1>
+      <p><strong>Generated at:</strong> {_html_escape(run['generated_at'])}</p>
+      <p><strong>Input directory:</strong> {_html_escape(run['input_dir'])}</p>
+      <p><strong>Extensions:</strong> {_html_escape(', '.join(run['extensions']))}</p>
+      <p><strong>Chunk config:</strong> size={_html_escape(run['chunk_size_tokens'])}, overlap={_html_escape(run['chunk_overlap_tokens'])}, min={_html_escape(run['min_chunk_tokens'])}, max={_html_escape(run['max_chunk_tokens'])}</p>
     </section>
 
-    <section class="card">
-      <h2>Summary</h2>
-      <div class="stats">
-        <div class="stat"><div class="k">Total files</div><div class="v">{_html_escape(stats['total_files'])}</div></div>
-        <div class="stat"><div class="k">Error files</div><div class="v">{_html_escape(stats['error_files'])}</div></div>
-        <div class="stat"><div class="k">Warning files</div><div class="v">{_html_escape(stats['warning_files'])}</div></div>
-                <div class="stat"><div class="k">Dependency issues</div><div class="v">{_html_escape(stats['dependency_issue_files'])}</div></div>
-        <div class="stat"><div class="k">OCR used files</div><div class="v">{_html_escape(stats['ocr_used_files'])}</div></div>
-        <div class="stat"><div class="k">Table gain files</div><div class="v">{_html_escape(stats['table_gain_files'])}</div></div>
-      </div>
+    <section class=\"card\">
+      <h2>Global stats</h2>
+      <ul>
+        <li>Total files: {_html_escape(stats['total_files'])}</li>
+        <li>OCR used files (ON mode): {_html_escape(stats['ocr_used_files'])}</li>
+        <li>Total chunks OCR ON: {_html_escape(stats['total_chunks_ocr_on'])}</li>
+        <li>Total chunks OCR OFF: {_html_escape(stats['total_chunks_ocr_off'])}</li>
+      </ul>
     </section>
 
-        <section class="card">
-            <h2>Executive Focus</h2>
-            <p class="meta">Top findings to investigate first:</p>
-            <ul class="top">{top_finding_html}</ul>
-            <p class="meta">Table checks - pass: {_html_escape(table_status_counts.get('pass', 0))}, warn: {_html_escape(table_status_counts.get('warn', 0))}, fail: {_html_escape(table_status_counts.get('fail', 0))}, blocked: {_html_escape(table_status_counts.get('blocked', 0))}.</p>
-        </section>
-
-    <section class="card">
-      <h2>File Matrix</h2>
+    <section class=\"card\">
+      <h2>File summary</h2>
       <table>
         <thead>
           <tr>
             <th>File</th>
             <th>Ext</th>
-            <th>Severity</th>
-            <th>Table check</th>
-            <th>OCR used</th>
             <th>Chars ON</th>
             <th>Chars OFF</th>
-            <th>Chars gain</th>
-            <th>Table gain</th>
-            <th>Issues</th>
-            <th>Warnings</th>
+            <th>Chunks ON</th>
+            <th>Chunks OFF</th>
+            <th>OCR used</th>
           </tr>
         </thead>
         <tbody>
-          {''.join(rows)}
+          {''.join(summary_rows)}
         </tbody>
       </table>
     </section>
 
-    <section class="card">
-      <h2>Per-file previews</h2>
-      {''.join(details_blocks)}
+    <section class=\"card\">
+      <h2>Per-file full output</h2>
+      {''.join(detail_blocks)}
     </section>
   </div>
 </body>
@@ -725,24 +400,116 @@ def _build_html_report(payload: Dict[str, object]) -> str:
 """
 
 
-def _build_index_markdown(output_dir: Path) -> str:
+def _build_markdown_report(payload: Dict[str, object]) -> str:
+    run = payload["run"]
+    stats = payload["stats"]
+    files = payload["files"]
+
+    lines: List[str] = []
+    lines.append("# OCR Full Evaluation Report")
+    lines.append("")
+    lines.append(f"- Generated at: {run['generated_at']}")
+    lines.append(f"- Input directory: {run['input_dir']}")
+    lines.append(f"- Extensions: {', '.join(run['extensions'])}")
+    lines.append(
+        "- Chunk config: size={size}, overlap={overlap}, min={min_tokens}, max={max_tokens}".format(
+            size=run["chunk_size_tokens"],
+            overlap=run["chunk_overlap_tokens"],
+            min_tokens=run["min_chunk_tokens"],
+            max_tokens=run["max_chunk_tokens"],
+        )
+    )
+    lines.append("")
+    lines.append("## Stats")
+    lines.append("")
+    lines.append(f"- Total files: {stats['total_files']}")
+    lines.append(f"- OCR used files (ON mode): {stats['ocr_used_files']}")
+    lines.append(f"- Total chunks OCR ON: {stats['total_chunks_ocr_on']}")
+    lines.append(f"- Total chunks OCR OFF: {stats['total_chunks_ocr_off']}")
+    lines.append("")
+
+    for file_entry in files:
+        lines.append(f"## {file_entry['relative_path']}")
+        lines.append("")
+        lines.append(f"- Extension: {file_entry['extension']}")
+        lines.append(f"- Size bytes: {file_entry['size_bytes']}")
+        lines.append(f"- OCR ON chars: {file_entry['ocr_on']['text_char_count']}")
+        lines.append(f"- OCR OFF chars: {file_entry['ocr_off']['text_char_count']}")
+        lines.append(f"- OCR ON chunks: {file_entry['ocr_on']['chunk_count']}")
+        lines.append(f"- OCR OFF chunks: {file_entry['ocr_off']['chunk_count']}")
+        lines.append("")
+
+        lines.append("### OCR ON - full document text")
+        lines.append("")
+        lines.append("```text")
+        lines.append(file_entry["ocr_on"]["text"])
+        lines.append("```")
+        lines.append("")
+
+        lines.append("### OCR ON - full chunks")
+        lines.append("")
+        for chunk in file_entry["ocr_on"]["chunks"]:
+            lines.append(
+                "- chunk_index={index} token_count={tokens} char_count={chars} content_type={content_type}".format(
+                    index=chunk["chunk_index"],
+                    tokens=chunk["chunk_token_count"],
+                    chars=chunk["chunk_char_count"],
+                    content_type=chunk["chunk_content_type"],
+                )
+            )
+            lines.append("```text")
+            lines.append(chunk["chunk_text"])
+            lines.append("```")
+        lines.append("")
+
+        lines.append("### OCR OFF - full document text")
+        lines.append("")
+        lines.append("```text")
+        lines.append(file_entry["ocr_off"]["text"])
+        lines.append("```")
+        lines.append("")
+
+        lines.append("### OCR OFF - full chunks")
+        lines.append("")
+        for chunk in file_entry["ocr_off"]["chunks"]:
+            lines.append(
+                "- chunk_index={index} token_count={tokens} char_count={chars} content_type={content_type}".format(
+                    index=chunk["chunk_index"],
+                    tokens=chunk["chunk_token_count"],
+                    chars=chunk["chunk_char_count"],
+                    content_type=chunk["chunk_content_type"],
+                )
+            )
+            lines.append("```text")
+            lines.append(chunk["chunk_text"])
+            lines.append("```")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_index_markdown() -> str:
     return "\n".join(
         [
-            "# OCR Comparison Outputs",
+            "# OCR Full Evaluation Outputs",
             "",
-            "Primary files generated by run_folder_ocr_comparison.py:",
+            "Generated artifacts:",
             "",
-            "- [comparison_report.html](comparison_report.html)",
-            "- [comparison_report.md](comparison_report.md)",
-            "- [comparison_results.json](comparison_results.json)",
+            "- full_report.html: browser view with full text/chunks for OCR ON and OCR OFF",
+            "- full_report.md: markdown full dump (no preview)",
+            "- full_results.json: complete structured payload (per-file full text + full chunks)",
+            "- chunks_ocr_on.jsonl: flat chunk dataset for OCR ON",
+            "- chunks_ocr_off.jsonl: flat chunk dataset for OCR OFF",
+            "- documents_ocr_on/: one full text file per source document",
+            "- documents_ocr_off/: one full text file per source document",
             "",
-            "Recommended entry point: open comparison_report.html in a browser.",
+            "Suggested default for downstream processing: full_results.json + chunks_ocr_on.jsonl/chunks_ocr_off.jsonl.",
         ]
     )
 
 
 def _parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run OCR ON/OFF parsing on a folder and generate reports.")
+    parser = argparse.ArgumentParser(description="Run full OCR ON/OFF evaluation on a folder")
     parser.add_argument("input_dir", help="Folder to parse recursively")
     parser.add_argument(
         "--output-dir",
@@ -754,11 +521,11 @@ def _parse_arguments() -> argparse.Namespace:
         default=",".join(sorted(SUPPORTED_EXTENSIONS)),
         help="Comma-separated extensions to include",
     )
-    parser.add_argument(
-        "--clean-output",
-        action="store_true",
-        help="Delete output directory before writing new files",
-    )
+    parser.add_argument("--clean-output", action="store_true", help="Delete output directory before writing")
+    parser.add_argument("--chunk-size-tokens", type=int, default=600)
+    parser.add_argument("--chunk-overlap-tokens", type=int, default=120)
+    parser.add_argument("--min-chunk-tokens", type=int, default=80)
+    parser.add_argument("--max-chunk-tokens", type=int, default=0)
     return parser.parse_args()
 
 
@@ -769,11 +536,7 @@ def main() -> None:
     if not input_dir.exists() or not input_dir.is_dir():
         raise SystemExit(f"Input directory not found or not a directory: {input_dir}")
 
-    extensions = {
-        ext.strip().lower().lstrip(".")
-        for ext in str(args.extensions).split(",")
-        if ext.strip()
-    }
+    extensions = {ext.strip().lower().lstrip(".") for ext in str(args.extensions).split(",") if ext.strip()}
     if not extensions:
         raise SystemExit("No extension provided")
 
@@ -786,77 +549,102 @@ def main() -> None:
     if not files:
         raise SystemExit(f"No supported files found in: {input_dir}")
 
+    docs_on_dir = output_dir / "documents_ocr_on"
+    docs_off_dir = output_dir / "documents_ocr_off"
+    docs_on_dir.mkdir(parents=True, exist_ok=True)
+    docs_off_dir.mkdir(parents=True, exist_ok=True)
+
     entries: List[Dict[str, object]] = []
 
-    for index, file_path in enumerate(files, start=1):
-        extension = _normalize_extension(file_path)
-        print(f"[{index}/{len(files)}] Parsing {file_path.name} ({extension})")
+    for idx, file_path in enumerate(files, start=1):
+        ext = _normalize_extension(file_path)
+        print(f"[{idx}/{len(files)}] Parsing {file_path.name} ({ext})")
 
-        on_result = _run_single_parse(file_path, extension, ocr_enabled=True)
-        off_result = _run_single_parse(file_path, extension, ocr_enabled=False)
-
-        on_metrics = _compute_text_metrics(on_result)
-        off_metrics = _compute_text_metrics(off_result)
-
-        quality = _evaluate_quality(extension, on_result, off_result, on_metrics, off_metrics)
+        on_result = _run_single_parse(file_path, ext, ocr_enabled=True)
+        off_result = _run_single_parse(file_path, ext, ocr_enabled=False)
 
         on_text = str(on_result.get("text") or "")
         off_text = str(off_result.get("text") or "")
 
+        on_chunks = _build_chunks_payload(
+            text=on_text,
+            chunk_size_tokens=args.chunk_size_tokens,
+            chunk_overlap_tokens=args.chunk_overlap_tokens,
+            min_chunk_tokens=args.min_chunk_tokens,
+            max_chunk_tokens=args.max_chunk_tokens,
+        )
+        off_chunks = _build_chunks_payload(
+            text=off_text,
+            chunk_size_tokens=args.chunk_size_tokens,
+            chunk_overlap_tokens=args.chunk_overlap_tokens,
+            min_chunk_tokens=args.min_chunk_tokens,
+            max_chunk_tokens=args.max_chunk_tokens,
+        )
+
+        rel_path = _to_relative(file_path)
+        on_text_path = _write_full_text_file(docs_on_dir, rel_path, on_text)
+        off_text_path = _write_full_text_file(docs_off_dir, rel_path, off_text)
+
         entry = {
-            "relative_path": _to_relative(file_path),
-            "extension": extension,
+            "relative_path": rel_path,
+            "extension": ext,
             "size_bytes": file_path.stat().st_size,
-            "ocr_on": _format_short_mode_payload(on_result, on_metrics, _table_excerpt(on_text)),
-            "ocr_off": _format_short_mode_payload(off_result, off_metrics, _table_excerpt(off_text)),
-            "quality": quality,
+            "ocr_on_text_file": _to_relative(on_text_path),
+            "ocr_off_text_file": _to_relative(off_text_path),
+            "ocr_on": _base_mode_payload(on_result, on_chunks),
+            "ocr_off": _base_mode_payload(off_result, off_chunks),
         }
         entries.append(entry)
 
-    total_files = len(entries)
-    error_files = sum(1 for item in entries if item["quality"]["severity"] == "error")
-    warning_files = sum(1 for item in entries if item["quality"]["severity"] == "warning")
-    ocr_used_files = sum(1 for item in entries if bool(item["ocr_on"].get("ocr_used")))
-    table_gain_files = sum(1 for item in entries if int(item["quality"].get("table_gain") or 0) > 0)
-    dependency_issue_files = sum(
-        1
-        for item in entries
-        if item["quality"].get("on_error_kind") == "dependency"
-        or item["quality"].get("off_error_kind") == "dependency"
-    )
+    stats = {
+        "total_files": len(entries),
+        "ocr_used_files": sum(1 for item in entries if bool(item["ocr_on"].get("ocr_used"))),
+        "total_chunks_ocr_on": sum(int(item["ocr_on"].get("chunk_count") or 0) for item in entries),
+        "total_chunks_ocr_off": sum(int(item["ocr_off"].get("chunk_count") or 0) for item in entries),
+    }
 
     payload: Dict[str, object] = {
         "run": {
             "generated_at": _utc_now_iso(),
             "input_dir": _to_relative(input_dir),
             "extensions": sorted(extensions),
+            "chunk_size_tokens": int(args.chunk_size_tokens),
+            "chunk_overlap_tokens": int(args.chunk_overlap_tokens),
+            "min_chunk_tokens": int(args.min_chunk_tokens),
+            "max_chunk_tokens": int(args.max_chunk_tokens),
         },
-        "stats": {
-            "total_files": total_files,
-            "error_files": error_files,
-            "warning_files": warning_files,
-            "ocr_used_files": ocr_used_files,
-            "table_gain_files": table_gain_files,
-            "dependency_issue_files": dependency_issue_files,
-        },
+        "stats": stats,
         "files": entries,
     }
 
-    json_path = output_dir / "comparison_results.json"
-    md_path = output_dir / "comparison_report.md"
-    html_path = output_dir / "comparison_report.html"
+    json_path = output_dir / "full_results.json"
+    md_path = output_dir / "full_report.md"
+    html_path = output_dir / "full_report.html"
+    chunks_on_path = output_dir / "chunks_ocr_on.jsonl"
+    chunks_off_path = output_dir / "chunks_ocr_off.jsonl"
     index_path = output_dir / "README.md"
 
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     md_path.write_text(_build_markdown_report(payload), encoding="utf-8")
     html_path.write_text(_build_html_report(payload), encoding="utf-8")
-    index_path.write_text(_build_index_markdown(output_dir), encoding="utf-8")
+    index_path.write_text(_build_index_markdown(), encoding="utf-8")
+
+    with chunks_on_path.open("w", encoding="utf-8") as handle_on, chunks_off_path.open("w", encoding="utf-8") as handle_off:
+        for item in entries:
+            for row in _flatten_chunks_for_jsonl(item, "ocr_on"):
+                handle_on.write(json.dumps(row, ensure_ascii=False) + "\n")
+            for row in _flatten_chunks_for_jsonl(item, "ocr_off"):
+                handle_off.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     print("\nGenerated outputs:")
     print(f"- {_to_relative(index_path)}")
     print(f"- {_to_relative(html_path)}")
     print(f"- {_to_relative(md_path)}")
     print(f"- {_to_relative(json_path)}")
+    print(f"- {_to_relative(chunks_on_path)}")
+    print(f"- {_to_relative(chunks_off_path)}")
+    print(f"- {_to_relative(docs_on_dir)}")
+    print(f"- {_to_relative(docs_off_dir)}")
 
 
 if __name__ == "__main__":
