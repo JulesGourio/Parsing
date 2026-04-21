@@ -1,0 +1,604 @@
+{
+  "run": {
+    "generated_at": "2026-04-21T06:00:09Z",
+    "input_dir": "benchmark_samples",
+    "extensions": [
+      "bmp",
+      "csv",
+      "doc",
+      "docm",
+      "docx",
+      "htm",
+      "html",
+      "jpeg",
+      "jpg",
+      "json",
+      "md",
+      "pdf",
+      "png",
+      "pptx",
+      "rtf",
+      "tif",
+      "tiff",
+      "tsv",
+      "txt",
+      "webp",
+      "xls",
+      "xlsb",
+      "xlsm",
+      "xlsx",
+      "xml"
+    ]
+  },
+  "stats": {
+    "total_files": 11,
+    "error_files": 0,
+    "warning_files": 0,
+    "ocr_used_files": 1,
+    "table_gain_files": 1,
+    "dependency_issue_files": 0
+  },
+  "files": [
+    {
+      "relative_path": "benchmark_samples/attention_is_all_you_need.pdf",
+      "extension": "pdf",
+      "size_bytes": 2215244,
+      "ocr_on": {
+        "parser_strategy": "pdfplumber:pdf|table_text_excluded:1|libs:pdfplumber=0.11.5|ocr_pages:12|ocr_supplement_pages:12|ocr_attempted_pages:12|ocr_layout_tables:3|ocr_layout_diagrams:2|ocr_trace:p2:rapidocr|lines:47|avg_conf:0.98,p3:rapidocr|lines:56|avg_conf:0.98,p4:rapidocr|lines:51|avg_conf:0.96,p5:rapidocr|lines:44|avg_conf:0.98,p6:rapidocr|lines:60|avg_conf:0.97,p7:rapidocr|lines:45|avg_conf:0.98|table_detector_fallback_pages:15",
+        "parser_error": null,
+        "parse_time_seconds": 60.7245,
+        "ocr_attempted": true,
+        "ocr_used": true,
+        "ocr_engine_trace": "p2:rapidocr|lines:47|avg_conf:0.98,p3:rapidocr|lines:56|avg_conf:0.98,p4:rapidocr|lines:51|avg_conf:0.96,p5:rapidocr|lines:44|avg_conf:0.98,p6:rapidocr|lines:60|avg_conf:0.97,p7:rapidocr|lines:45|avg_conf:0.98,p9:rapidocr|lines:147|avg_conf:0.99,p10:rapidocr|lines:72|avg_conf:0.99,p11:rapidocr|lines:41|avg_conf:0.99,p12:rapidocr|lines:41|avg_conf:0.99,p13:rapidocr|lines:66|avg_conf:0.94,p14:rapidocr|lines:86|avg_conf:0.94",
+        "ocr_pages": 12,
+        "ocr_supplement_pages": 12,
+        "chars": 97912,
+        "tokens": 31123,
+        "table_markers": 36,
+        "diagram_markers": 2,
+        "table_hints": 23,
+        "preview": "‡Work performed while at Google Research.\n31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.\n[TABLE_START]\n| | Providedproperattributionisprovided,Googleherebygrantspermissionto |\n| --- | --- |\n[10], consuming the previously generated symbols as additional input when generating the next.\n2\n[TABLE_START]\n| 1 Introduction |\n| --- |\nAn attention function can be described as mapping a query and a set of key-value pairs to an output,\nwhere the query, keys, values, and output are all vectors. The output is computed as a weighted sum\n[TABLE_START]\n| TheTransformerfollowsthisoverallarchitectureusingstackedself-attentionandpoint-wise,fully |\n| --- |\n4To illustrate why the dot products get large, assume that the components of q and k are independent random\nyn\n[TABLE_START]\n| SoftMax MatMul | Concat Linear |\n| Mask (opt.) Scale | Scaled Dot-Product Attention |\n| 3.2.2Multi-HeadAttention | Instead of performing a single attention function with dmodel-dimensional keys, values and queries, we found it beneficial to linearly project the queries, keys and values h times with different, learned linear projections to dk, dk and d, dimensions, respectively. On each of these projected versions of queries,keys and values we then perform the attention function in parallel, yielding d-dimensional 4To illustrate why the dot products get large, assume that the components of q and k are independent random yn |\n[TABLE_END]"
+      },
+      "ocr_off": {
+        "parser_strategy": "pdfplumber:pdf|table_text_excluded:1|libs:pdfplumber=0.11.5|table_detector_fallback_pages:15",
+        "parser_error": null,
+        "parse_time_seconds": 3.5322,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 58915,
+        "tokens": 21162,
+        "table_markers": 33,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "‡Work performed while at Google Research.\n31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.\n[TABLE_START]\n| | Providedproperattributionisprovided,Googleherebygrantspermissionto |\n| --- | --- |\n## Page 2\n2\n[TABLE_START]\n| 1 Introduction |\n| --- |\nFigure 1: The Transformer - model architecture.\n3\n[TABLE_START]\n| TheTransformerfollowsthisoverallarchitectureusingstackedself-attentionandpoint-wise,fully |\n| --- |\nScaled Dot-Product Attention Multi-Head Attention\n4\n[TABLE_START]\n| Figure 2: (left) Scaled Dot-Product Attention. (right) Multi-Head Attention consists of several |\n| --- |\n## Page 5\n5"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 38997,
+        "table_gain": 3,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "pass",
+          "expectation": "hint_based",
+          "reason": "Table hints and table marker detected."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/docx_template.docx",
+      "extension": "docx",
+      "size_bytes": 14052,
+      "ocr_on": {
+        "parser_strategy": "python_docx:docx|libs:python-docx=1.1.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0081,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 453,
+        "tokens": 139,
+        "table_markers": 1,
+        "diagram_markers": 0,
+        "table_hints": 1,
+        "preview": "Inline image : {{ myimage }} -> you can write just after\nImage with a forced ratio : {{ myimageratio }}\n# In a table :\n[TABLE_START]\n| Image | Description |\n| --- | --- |"
+      },
+      "ocr_off": {
+        "parser_strategy": "python_docx:docx|libs:python-docx=1.1.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0083,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 453,
+        "tokens": 139,
+        "table_markers": 1,
+        "diagram_markers": 0,
+        "table_hints": 1,
+        "preview": "Inline image : {{ myimage }} -> you can write just after\nImage with a forced ratio : {{ myimageratio }}\n# In a table :\n[TABLE_START]\n| Image | Description |\n| --- | --- |"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "n/a",
+          "expectation": "none",
+          "reason": "No strong table expectation for this file type."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/pandas_test1.xls",
+      "extension": "xls",
+      "size_bytes": 28672,
+      "ocr_on": {
+        "parser_strategy": "pandas_excel:xls|engine:xlrd|mode:table_only|libs:pandas=2.2.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0163,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 1729,
+        "tokens": 825,
+        "table_markers": 4,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "## Sheet: Sheet1\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| 2000-01-03 00:00:00 | 0.980268513777 | 3.68573087906 | -0.364216805298 | -1.15973806169 |\n[TABLE_END]\n## Sheet: Sheet2\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| | col | we | should | ignore |\n[TABLE_END]\n## Sheet: Sheet3\n[TABLE_START]\n| A | B | C | D | E | F |\n| --- | --- | --- | --- | --- | --- |\n[TABLE_END]\n## Sheet: Sheet4\n[TABLE_START]\n| i1 | a | x |\n| --- | --- | --- |"
+      },
+      "ocr_off": {
+        "parser_strategy": "pandas_excel:xls|engine:xlrd|mode:table_only|libs:pandas=2.2.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0162,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 1729,
+        "tokens": 825,
+        "table_markers": 4,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "## Sheet: Sheet1\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| 2000-01-03 00:00:00 | 0.980268513777 | 3.68573087906 | -0.364216805298 | -1.15973806169 |\n[TABLE_END]\n## Sheet: Sheet2\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| | col | we | should | ignore |\n[TABLE_END]\n## Sheet: Sheet3\n[TABLE_START]\n| A | B | C | D | E | F |\n| --- | --- | --- | --- | --- | --- |\n[TABLE_END]\n## Sheet: Sheet4\n[TABLE_START]\n| i1 | a | x |\n| --- | --- | --- |"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "pass",
+          "expectation": "required",
+          "reason": "Expected [TABLE_START] marker found for tabular input."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/pandas_test1.xlsb",
+      "extension": "xlsb",
+      "size_bytes": 11359,
+      "ocr_on": {
+        "parser_strategy": "pandas_excel:xlsb|engine:pyxlsb|mode:table_only|libs:pandas=2.2.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0205,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 1533,
+        "tokens": 685,
+        "table_markers": 4,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "## Sheet: Sheet1\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| 36528 | 0.980268513777 | 3.68573087906 | -0.364216805298 | -1.15973806169 |\n[TABLE_END]\n## Sheet: Sheet2\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| | col | we | should | ignore |\n[TABLE_END]\n## Sheet: Sheet3\n[TABLE_START]\n| A | B | C | D | E | F |\n| --- | --- | --- | --- | --- | --- |\n[TABLE_END]\n## Sheet: Sheet4\n[TABLE_START]\n| i1 | a | x |\n| --- | --- | --- |"
+      },
+      "ocr_off": {
+        "parser_strategy": "pandas_excel:xlsb|engine:pyxlsb|mode:table_only|libs:pandas=2.2.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0208,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 1533,
+        "tokens": 685,
+        "table_markers": 4,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "## Sheet: Sheet1\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| 36528 | 0.980268513777 | 3.68573087906 | -0.364216805298 | -1.15973806169 |\n[TABLE_END]\n## Sheet: Sheet2\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| | col | we | should | ignore |\n[TABLE_END]\n## Sheet: Sheet3\n[TABLE_START]\n| A | B | C | D | E | F |\n| --- | --- | --- | --- | --- | --- |\n[TABLE_END]\n## Sheet: Sheet4\n[TABLE_START]\n| i1 | a | x |\n| --- | --- | --- |"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "pass",
+          "expectation": "required",
+          "reason": "Expected [TABLE_START] marker found for tabular input."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/pandas_test1.xlsx",
+      "extension": "xlsx",
+      "size_bytes": 12074,
+      "ocr_on": {
+        "parser_strategy": "pandas_excel:xlsx|engine:openpyxl|mode:table_only|libs:pandas=2.2.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0886,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 1729,
+        "tokens": 825,
+        "table_markers": 4,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "## Sheet: Sheet1\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| 2000-01-03 00:00:00 | 0.980268513777 | 3.68573087906 | -0.364216805298 | -1.15973806169 |\n[TABLE_END]\n## Sheet: Sheet2\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| | col | we | should | ignore |\n[TABLE_END]\n## Sheet: Sheet3\n[TABLE_START]\n| A | B | C | D | E | F |\n| --- | --- | --- | --- | --- | --- |\n[TABLE_END]\n## Sheet: Sheet4\n[TABLE_START]\n| i1 | a | x |\n| --- | --- | --- |"
+      },
+      "ocr_off": {
+        "parser_strategy": "pandas_excel:xlsx|engine:openpyxl|mode:table_only|libs:pandas=2.2.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0884,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 1729,
+        "tokens": 825,
+        "table_markers": 4,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "## Sheet: Sheet1\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| 2000-01-03 00:00:00 | 0.980268513777 | 3.68573087906 | -0.364216805298 | -1.15973806169 |\n[TABLE_END]\n## Sheet: Sheet2\n[TABLE_START]\n| Column 1 | A | B | C | D |\n| --- | --- | --- | --- | --- |\n| | col | we | should | ignore |\n[TABLE_END]\n## Sheet: Sheet3\n[TABLE_START]\n| A | B | C | D | E | F |\n| --- | --- | --- | --- | --- | --- |\n[TABLE_END]\n## Sheet: Sheet4\n[TABLE_START]\n| i1 | a | x |\n| --- | --- | --- |"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "pass",
+          "expectation": "required",
+          "reason": "Expected [TABLE_START] marker found for tabular input."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/real_spec.html",
+      "extension": "html",
+      "size_bytes": 656574,
+      "ocr_on": {
+        "parser_strategy": "textlike:html|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|html_tables:8",
+        "parser_error": null,
+        "parse_time_seconds": 0.2619,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 256832,
+        "tokens": 58971,
+        "table_markers": 8,
+        "diagram_markers": 0,
+        "table_hints": 88,
+        "preview": "the group; that page also includes\ninstructions for disclosing a patent. An individual who has actual\nknowledge of a patent which the individual believes contains Essential Claim(s) must disclose the information in accordance with section 6 of the W3C Patent Policy . This document is governed by the 03 November 2023 W3C Process Document . Table of Contents Abstract Status of This Document 1. Introduction 2. Scope 3. Terms, definitions, and abbreviated terms 4. Concepts 4.1 Static and Animated images 4.2 Images 4.3 Color spaces 4.4 Reference image to PNG image transformation Introduction 4.4.1 Alpha separation 4.4.2 Indexing 4.4.3 RGB merging 4.4.4 Alpha compaction 4.4.5 Sample depth scaling 4.5 PNG image 4.6 Encoding the PNG image Introduction 4.6.1 Pass extraction 4.6.2 Scanline serialization 4.6.3 Filtering 4.6.4 Compression 4.6.5 Chunking 4.7 Additional information 4.8 PNG datastream 4.8.1 Chunks 4.8.2 Chunk types 4.9 APNG : frame-based animation Introduction 4.9.1 Structure 4.9.2 Sequence numbers 4.9.3 Output buffer 4.9.4 Canvas 4.10 Error handling 4.11 Extensions 5. Datastream structure 5.1 PNG datastream 5.2 PNG signature 5.3 Chunk layout 5.4 Chunk naming conventions 5.5 CRC algorithm 5.6 Chunk ordering 5.7 Defining chunks 5.7.1 General 5.7.2 Defining public chunks 5.7.3 Defining private chunks 5.8 Private field values 6. Reference image to PNG image transformation 6.1 Color types and values 6.2 Alpha representation 7. Encoding the PNG image as a PNG datastream 7.1 Integers and byte order 7.2 Scanlines 7.3 Filtering 8. Interlacing and pass extraction Introduction 8.1 Interlace methods 9. Filtering 9.1 Filter methods and filter types 9.2 Filter types for filter method 0 9.3 Filter type 3: Average 9.4 Filter type 4: Paeth 10. Compression 10.1 Compression method 0 10.2 Compression of the sequence of filtered scanlines 10.3 Other uses of compression 11. Chunk specifications 11.1 General 11.2 Critical chunks Introduction 11.2.1 IHDR Image header 11.2.2 PLTE Palette 11.2.3 IDAT Image data 11.2.4 IEND Image trailer 11.3 Ancillary chunks Introduction 11.3.1 Transparency information 11.3.1.1 tRNS Transparency 11.3.2 Color space information 11.3.2.1 cHRM Primary chromaticities and white point 11.3.2.2 gAMA Image gamma 11.3.2.3 iCCP Embedded ICC profile 11.3.2.4 sBIT Significant bits 11.3.2.5 sRGB Standard RGB color space 11.3.2.6 cICP Coding-independent code points for video signal type identification 11.3.2.7 mDCV Mastering Display Color Volume 11.3.2.8 cLLI Content Light Level Information 11.3.3 Textual information Introduction 11.3.3.1 Keywords and text strings 11.3.3.2 tEXt Textual data 11.3.3.3 zTXt Compressed textual data 11.3.3.4 iTXt International textual data 11.3.4 Miscellaneous information 11.3.4.1 bKGD Background color 11.3.4.2 hIST Image histogram 11.3.4.3 pHYs Physical pixel dimensions 11.3.4.4 sPLT Suggested palette 11.3.4.5 eXIf Exchangeable Image File (Exif) Profile 11.3.4.5.1 eXIf General Recommendations 11.3.4.5.2 eXIf Recommendations for Decoders 11.3.4.5.3 eXIf Recommendations for Encoders 11.3.5 Time stamp information 11.3.5.1 tIME Image last-modification time 11.3.6 Animation information 11.3.6.1 acTL Animation Control Chunk 11.3.6.2 fcTL Frame Control Chunk 11.3.6.3 fdAT Frame Data Chunk 12. PNG Encoders Introduction 12.1 Encoder gamma handling 12.2 Encoder color handling 12.3 Alpha channel creation 12.4 Sample depth scaling 12.5 Suggested palettes 12.6 Interlacing 12.7 Filter selection 12.8 Compression 12.9 Text chunk processing 12.10 Chunking 12.10.1 Use of private chunks 12.10.2 Use of non-reserved field values 12.10.3 Ancillary chunks 13. PNG decoders and viewers Introduction 13.1 Error handling 13.2 Error checking 13.3 Security considerations 13.4 Privacy considerations 13.5 Chunking 13.6 Pixel dimensions 13.7 Text chunk processing 13.8 Decompression 13.9 Filtering 13.10 Interlacing and progressive display 13.11 Truecolor image handling 13.12 Sample depth rescaling 13.13 Decoder gamma handling 13.14 Decoder color handling 13.15 Background color 13.16 Alpha channel processing 13.17 Histogram and suggested palette usage 14. Editors 14.1 Additional chunk types 14.2 Behavior of PNG editors 14.3 Ordering of chunks 14.3.1 Ordering of critical chunks 14.3.2 Ordering of ancillary chunks 15. Conformance 15.1 Conformance 15.2 Introduction 15.2.1 Objectives 15.2.2 Scope 15.3 Conformance conditions 15.3.1 Conformance of PNG datastreams 15.3.2 Conformance of PNG encoders 15.3.3 Conformance of PNG decoders 15.3.4 Conformance of PNG editors A. Internet Media Types A.1 image/png A.2 image/apng B. Guidelines for private chunk types C. Gamma and chromaticity D. Sample CRC implementation E. Online resources Introduction E.1 ICC profile specifications E.2 PNG web site E.3 Sample implementation and test images F. Changes F.1 Changes since the Proposed Recommendation of 15 May 2025 F.2 Changes since the Candidate Recommendation Snapshot of 13 March 2025 F.3 Changes since the Candidate Recommendation Draft of 21 January 2025 (Third Edition) F.4 Changes since the Candidate Recommendation Draft of 18 July 2024 (Third Edition) F.5 Changes since the Candidate Recommendation Snapshot of 21 September 2023 (Third Edition) F.6 Changes since the Working Draft of 20 July 2023 (Third Edition) F.7 Changes since the First Public Working Draft of 25 October 2022 (Third Edition) F.8 Changes since the W3C Recommendation of 10 November 2003 (PNG Second Edition) F.9 Changes between First and Second Editions G. References G.1 Normative references G.2 Informative references 1. Introduction The design goals for this specification were: Portability: encoding, decoding, and transmission should be software and hardware platform independent. Completeness: it should be possible to represent truecolor , indexed-color , and greyscale images, in each case with\nthe option of transparency, color space information, and ancillary information such as textual comments. Serial encode and decode: it should be possible for datastreams to be generated serially and read serially, allowing the\ndatastream format to be used for on-the-fly generation and display of images across a serial communication channel. Progressive presentation: it should be possible to transmit datastreams so that an approximation of the whole image can be\nis a frame.\nThus, for animated PNG, when the static image is not the first frame,\nthe static image is not considered to be a frame. frame buffer the final digital storage area for the image shown by most types of computer display. Note Software causes an image to appear on screen by loading the image into the frame buffer . fully transparent black pixel where the red, green, blue and alpha components are all equal to zero. gamma value value of the exponent of a gamma transfer function . gamma power-law transfer function . high dynamic range ( HDR ) an image format capable of storing images with a relatively high dynamic range similar to or in excess of the human visual system's instantaneous dynamic range (~12-14 stops ). PNG allows the use of two HDR formats, HLG and PQ [ ITU-R-BT.2100 ]. hybrid log-gamma ( HLG ) transfer function defined in [ ITU-R-BT.2100 ] Table 5. (A relative scene-referred system.) full-range image image where reference black and white correspond, respectively, to sample values 0 and 2 bit depth -\n1 . image data 1-dimensional array of scanlines within an image. interlaced PNG image sequence of reduced images generated from the PNG image by pass extraction . lossless method of data compression that permits reconstruction of the original data exactly, bit-for-bit. luminance an objective measurement of the visible light intensity, taking into account the sensitivity of the human eye to different wavelengths. Note Luminance and chromaticity together fully define a measured color. For a formal definition, see [ COLORIMETRY ]. LZ77 data compression algorithm described in [ Ziv-Lempel ]. narrow-range image Image where reference black and white do not correspond, respectively, to sample values 0 and 2 bit depth - 1 . network byte order byte order in which the most significant byte comes first, then the less significant bytes in descending order of\nsignificance ( MSB LSB for two-byte integers, MSB B2 B1 LSB for four-byte integers). perceptual quantizer ( PQ ) transfer function defined in [ ITU-R-BT.2100 ] Table 4. (An absolute display-referred system.) Note Only RGB may be used in PNG, ICtCp is NOT supported. PNG decoder process or device that reconstructs the reference image from a PNG datastream and generates a\ncorresponding delivered image . PNG editor process or device that creates a modification of an existing PNG datastream , preserving unmodified ancillary\ninformation wherever possible, and obeying the chunk ordering rules, even for unknown chunk types. PNG encoder process or device which constructs a reference image from a source image , and generates a PNG\nvalues. PNG two-byte unsigned integer a two-byte unsigned integer in network byte order. sample intersection of a channel and a pixel in an image. sample depth number of bits used to represent a sample value. scanline row of pixels within an image or interlaced PNG image . standard dynamic range ( SDR ) an image format capable of storing images with a relatively low dynamic range of 5-8 stops . Examples include [ SRGB ], [ Display-P3 ], [ ITU-R-BT.709 ]. Note Standard dynamic range is independent of the primaries and hence, gamut. Wide color gamut SDR formats are supported by PNG. stop a change in scene light luminance of a factor of 2. transfer function function relating image luminance with image samples. white point chromaticity of a computer display's nominal white value. zlib deflate -style compression method. SOURCE: [ rfc1950 ] Note Also refers to the name of a library containing a sample implementation of this method. Cyclic Redundancy Code CRC type of check value designed to detect most transmission errors. Note A decoder calculates the CRC for the received data and checks by comparing it to the CRC calculated by\nthe encoder and appended to the data. A mismatch indicates that the data or the CRC were corrupted in transit. Cathode Ray Tube CRT vacuum tube containing one or more electron guns, which emit electron beams that are manipulated to display images on a\nphosphorescent screen. Electro-Optical Transfer Function EOTF The transfer function between the electrical or digital domain and light energy. It defines the amount of light emitted by a display for a given input signal. Least Significant Byte LSB Least significant byte of a multi- byte value. Most Significant Byte MSB Most significant byte of a multi- byte value. Opto-Electrical Transfer Function OETF The transfer function between light energy and the electrical or digital domain. It defines the amount of light in a scene required to produce a given output signal. 4. Concepts 4.1 Static and Animated images All PNG images contain a single static image . Some PNG images — called Animated PNG ( APNG ) — also\ncontain a frame-based animation sequence, the animated image . The first frame of this may be — but need not be —\nthe static image . Non-animation-capable displays (such as printers) will display the static image rather than\nwere widely adopted, enables the exact chromaticities of the RGB data to be specified, along with the gamma correction\nto be applied (see C. Gamma and chromaticity ). However, color-aware applications will prefer one of the first three\nmethods, while color-unaware applications will typically ignore all four methods. Table 1 is a list of chunk types that provide color space information,\neach with an associated Priority number. If a single image contains more than one of these chunk types,\nthe chunk with the lowest Priority number should take precedence and any higher-numbered chunk types should be ignored. Table 1 Color Chunk Priority Chunk Type Priority cICP 1 iCCP 2 sRGB 3 cHRM and gAMA 4 Gamma correction is not applied to the alpha channel, if present. Alpha samples are always full-range and represent"
+      },
+      "ocr_off": {
+        "parser_strategy": "textlike:html|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|html_tables:8",
+        "parser_error": null,
+        "parse_time_seconds": 0.2558,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 256832,
+        "tokens": 58971,
+        "table_markers": 8,
+        "diagram_markers": 0,
+        "table_hints": 88,
+        "preview": "the group; that page also includes\ninstructions for disclosing a patent. An individual who has actual\nknowledge of a patent which the individual believes contains Essential Claim(s) must disclose the information in accordance with section 6 of the W3C Patent Policy . This document is governed by the 03 November 2023 W3C Process Document . Table of Contents Abstract Status of This Document 1. Introduction 2. Scope 3. Terms, definitions, and abbreviated terms 4. Concepts 4.1 Static and Animated images 4.2 Images 4.3 Color spaces 4.4 Reference image to PNG image transformation Introduction 4.4.1 Alpha separation 4.4.2 Indexing 4.4.3 RGB merging 4.4.4 Alpha compaction 4.4.5 Sample depth scaling 4.5 PNG image 4.6 Encoding the PNG image Introduction 4.6.1 Pass extraction 4.6.2 Scanline serialization 4.6.3 Filtering 4.6.4 Compression 4.6.5 Chunking 4.7 Additional information 4.8 PNG datastream 4.8.1 Chunks 4.8.2 Chunk types 4.9 APNG : frame-based animation Introduction 4.9.1 Structure 4.9.2 Sequence numbers 4.9.3 Output buffer 4.9.4 Canvas 4.10 Error handling 4.11 Extensions 5. Datastream structure 5.1 PNG datastream 5.2 PNG signature 5.3 Chunk layout 5.4 Chunk naming conventions 5.5 CRC algorithm 5.6 Chunk ordering 5.7 Defining chunks 5.7.1 General 5.7.2 Defining public chunks 5.7.3 Defining private chunks 5.8 Private field values 6. Reference image to PNG image transformation 6.1 Color types and values 6.2 Alpha representation 7. Encoding the PNG image as a PNG datastream 7.1 Integers and byte order 7.2 Scanlines 7.3 Filtering 8. Interlacing and pass extraction Introduction 8.1 Interlace methods 9. Filtering 9.1 Filter methods and filter types 9.2 Filter types for filter method 0 9.3 Filter type 3: Average 9.4 Filter type 4: Paeth 10. Compression 10.1 Compression method 0 10.2 Compression of the sequence of filtered scanlines 10.3 Other uses of compression 11. Chunk specifications 11.1 General 11.2 Critical chunks Introduction 11.2.1 IHDR Image header 11.2.2 PLTE Palette 11.2.3 IDAT Image data 11.2.4 IEND Image trailer 11.3 Ancillary chunks Introduction 11.3.1 Transparency information 11.3.1.1 tRNS Transparency 11.3.2 Color space information 11.3.2.1 cHRM Primary chromaticities and white point 11.3.2.2 gAMA Image gamma 11.3.2.3 iCCP Embedded ICC profile 11.3.2.4 sBIT Significant bits 11.3.2.5 sRGB Standard RGB color space 11.3.2.6 cICP Coding-independent code points for video signal type identification 11.3.2.7 mDCV Mastering Display Color Volume 11.3.2.8 cLLI Content Light Level Information 11.3.3 Textual information Introduction 11.3.3.1 Keywords and text strings 11.3.3.2 tEXt Textual data 11.3.3.3 zTXt Compressed textual data 11.3.3.4 iTXt International textual data 11.3.4 Miscellaneous information 11.3.4.1 bKGD Background color 11.3.4.2 hIST Image histogram 11.3.4.3 pHYs Physical pixel dimensions 11.3.4.4 sPLT Suggested palette 11.3.4.5 eXIf Exchangeable Image File (Exif) Profile 11.3.4.5.1 eXIf General Recommendations 11.3.4.5.2 eXIf Recommendations for Decoders 11.3.4.5.3 eXIf Recommendations for Encoders 11.3.5 Time stamp information 11.3.5.1 tIME Image last-modification time 11.3.6 Animation information 11.3.6.1 acTL Animation Control Chunk 11.3.6.2 fcTL Frame Control Chunk 11.3.6.3 fdAT Frame Data Chunk 12. PNG Encoders Introduction 12.1 Encoder gamma handling 12.2 Encoder color handling 12.3 Alpha channel creation 12.4 Sample depth scaling 12.5 Suggested palettes 12.6 Interlacing 12.7 Filter selection 12.8 Compression 12.9 Text chunk processing 12.10 Chunking 12.10.1 Use of private chunks 12.10.2 Use of non-reserved field values 12.10.3 Ancillary chunks 13. PNG decoders and viewers Introduction 13.1 Error handling 13.2 Error checking 13.3 Security considerations 13.4 Privacy considerations 13.5 Chunking 13.6 Pixel dimensions 13.7 Text chunk processing 13.8 Decompression 13.9 Filtering 13.10 Interlacing and progressive display 13.11 Truecolor image handling 13.12 Sample depth rescaling 13.13 Decoder gamma handling 13.14 Decoder color handling 13.15 Background color 13.16 Alpha channel processing 13.17 Histogram and suggested palette usage 14. Editors 14.1 Additional chunk types 14.2 Behavior of PNG editors 14.3 Ordering of chunks 14.3.1 Ordering of critical chunks 14.3.2 Ordering of ancillary chunks 15. Conformance 15.1 Conformance 15.2 Introduction 15.2.1 Objectives 15.2.2 Scope 15.3 Conformance conditions 15.3.1 Conformance of PNG datastreams 15.3.2 Conformance of PNG encoders 15.3.3 Conformance of PNG decoders 15.3.4 Conformance of PNG editors A. Internet Media Types A.1 image/png A.2 image/apng B. Guidelines for private chunk types C. Gamma and chromaticity D. Sample CRC implementation E. Online resources Introduction E.1 ICC profile specifications E.2 PNG web site E.3 Sample implementation and test images F. Changes F.1 Changes since the Proposed Recommendation of 15 May 2025 F.2 Changes since the Candidate Recommendation Snapshot of 13 March 2025 F.3 Changes since the Candidate Recommendation Draft of 21 January 2025 (Third Edition) F.4 Changes since the Candidate Recommendation Draft of 18 July 2024 (Third Edition) F.5 Changes since the Candidate Recommendation Snapshot of 21 September 2023 (Third Edition) F.6 Changes since the Working Draft of 20 July 2023 (Third Edition) F.7 Changes since the First Public Working Draft of 25 October 2022 (Third Edition) F.8 Changes since the W3C Recommendation of 10 November 2003 (PNG Second Edition) F.9 Changes between First and Second Editions G. References G.1 Normative references G.2 Informative references 1. Introduction The design goals for this specification were: Portability: encoding, decoding, and transmission should be software and hardware platform independent. Completeness: it should be possible to represent truecolor , indexed-color , and greyscale images, in each case with\nthe option of transparency, color space information, and ancillary information such as textual comments. Serial encode and decode: it should be possible for datastreams to be generated serially and read serially, allowing the\ndatastream format to be used for on-the-fly generation and display of images across a serial communication channel. Progressive presentation: it should be possible to transmit datastreams so that an approximation of the whole image can be\nis a frame.\nThus, for animated PNG, when the static image is not the first frame,\nthe static image is not considered to be a frame. frame buffer the final digital storage area for the image shown by most types of computer display. Note Software causes an image to appear on screen by loading the image into the frame buffer . fully transparent black pixel where the red, green, blue and alpha components are all equal to zero. gamma value value of the exponent of a gamma transfer function . gamma power-law transfer function . high dynamic range ( HDR ) an image format capable of storing images with a relatively high dynamic range similar to or in excess of the human visual system's instantaneous dynamic range (~12-14 stops ). PNG allows the use of two HDR formats, HLG and PQ [ ITU-R-BT.2100 ]. hybrid log-gamma ( HLG ) transfer function defined in [ ITU-R-BT.2100 ] Table 5. (A relative scene-referred system.) full-range image image where reference black and white correspond, respectively, to sample values 0 and 2 bit depth -\n1 . image data 1-dimensional array of scanlines within an image. interlaced PNG image sequence of reduced images generated from the PNG image by pass extraction . lossless method of data compression that permits reconstruction of the original data exactly, bit-for-bit. luminance an objective measurement of the visible light intensity, taking into account the sensitivity of the human eye to different wavelengths. Note Luminance and chromaticity together fully define a measured color. For a formal definition, see [ COLORIMETRY ]. LZ77 data compression algorithm described in [ Ziv-Lempel ]. narrow-range image Image where reference black and white do not correspond, respectively, to sample values 0 and 2 bit depth - 1 . network byte order byte order in which the most significant byte comes first, then the less significant bytes in descending order of\nsignificance ( MSB LSB for two-byte integers, MSB B2 B1 LSB for four-byte integers). perceptual quantizer ( PQ ) transfer function defined in [ ITU-R-BT.2100 ] Table 4. (An absolute display-referred system.) Note Only RGB may be used in PNG, ICtCp is NOT supported. PNG decoder process or device that reconstructs the reference image from a PNG datastream and generates a\ncorresponding delivered image . PNG editor process or device that creates a modification of an existing PNG datastream , preserving unmodified ancillary\ninformation wherever possible, and obeying the chunk ordering rules, even for unknown chunk types. PNG encoder process or device which constructs a reference image from a source image , and generates a PNG\nvalues. PNG two-byte unsigned integer a two-byte unsigned integer in network byte order. sample intersection of a channel and a pixel in an image. sample depth number of bits used to represent a sample value. scanline row of pixels within an image or interlaced PNG image . standard dynamic range ( SDR ) an image format capable of storing images with a relatively low dynamic range of 5-8 stops . Examples include [ SRGB ], [ Display-P3 ], [ ITU-R-BT.709 ]. Note Standard dynamic range is independent of the primaries and hence, gamut. Wide color gamut SDR formats are supported by PNG. stop a change in scene light luminance of a factor of 2. transfer function function relating image luminance with image samples. white point chromaticity of a computer display's nominal white value. zlib deflate -style compression method. SOURCE: [ rfc1950 ] Note Also refers to the name of a library containing a sample implementation of this method. Cyclic Redundancy Code CRC type of check value designed to detect most transmission errors. Note A decoder calculates the CRC for the received data and checks by comparing it to the CRC calculated by\nthe encoder and appended to the data. A mismatch indicates that the data or the CRC were corrupted in transit. Cathode Ray Tube CRT vacuum tube containing one or more electron guns, which emit electron beams that are manipulated to display images on a\nphosphorescent screen. Electro-Optical Transfer Function EOTF The transfer function between the electrical or digital domain and light energy. It defines the amount of light emitted by a display for a given input signal. Least Significant Byte LSB Least significant byte of a multi- byte value. Most Significant Byte MSB Most significant byte of a multi- byte value. Opto-Electrical Transfer Function OETF The transfer function between light energy and the electrical or digital domain. It defines the amount of light in a scene required to produce a given output signal. 4. Concepts 4.1 Static and Animated images All PNG images contain a single static image . Some PNG images — called Animated PNG ( APNG ) — also\ncontain a frame-based animation sequence, the animated image . The first frame of this may be — but need not be —\nthe static image . Non-animation-capable displays (such as printers) will display the static image rather than\nwere widely adopted, enables the exact chromaticities of the RGB data to be specified, along with the gamma correction\nto be applied (see C. Gamma and chromaticity ). However, color-aware applications will prefer one of the first three\nmethods, while color-unaware applications will typically ignore all four methods. Table 1 is a list of chunk types that provide color space information,\neach with an associated Priority number. If a single image contains more than one of these chunk types,\nthe chunk with the lowest Priority number should take precedence and any higher-numbered chunk types should be ignored. Table 1 Color Chunk Priority Chunk Type Priority cICP 1 iCCP 2 sRGB 3 cHRM and gAMA 4 Gamma correction is not applied to the alpha channel, if present. Alpha samples are always full-range and represent"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "pass",
+          "expectation": "hint_based",
+          "reason": "Table hints and table marker detected."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/repo_sample.doc",
+      "extension": "doc",
+      "size_bytes": 22016,
+      "ocr_on": {
+        "parser_strategy": "antiword:doc|limits:cpu=60,mem=1024MB|bin:antiword|mode:binary_strings_fallback",
+        "parser_error": null,
+        "parse_time_seconds": 0.0135,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 765,
+        "tokens": 261,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "Test OLE file, saved as Word 97-2003 Document.\n[Content_Types].xml\n_rels/.rels\ntheme/theme/themeManager.xml\ntheme/theme/theme1.xml\nw toc'v\n3Vq%'#q\n:\\TZaG\nQg20pp\ntheme/theme/_rels/themeManager.xml.rels\nK(M&$R(.1\n[Content_Types].xmlPK\n_rels/.relsPK\ntheme/theme/themeManager.xmlPK\ntheme/theme/theme1.xmlPK\ntheme/theme/_rels/themeManager.xml.relsPK\n<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<a:clrMap xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/>\nLaurence Ipsum\nNormal.dotm\nMicrosoft Office Word\nMicrosoft Word 97-2003 Document"
+      },
+      "ocr_off": {
+        "parser_strategy": "antiword:doc|limits:cpu=60,mem=1024MB|bin:antiword|mode:binary_strings_fallback",
+        "parser_error": null,
+        "parse_time_seconds": 0.0136,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 765,
+        "tokens": 261,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "Test OLE file, saved as Word 97-2003 Document.\n[Content_Types].xml\n_rels/.rels\ntheme/theme/themeManager.xml\ntheme/theme/theme1.xml\nw toc'v\n3Vq%'#q\n:\\TZaG\nQg20pp\ntheme/theme/_rels/themeManager.xml.rels\nK(M&$R(.1\n[Content_Types].xmlPK\n_rels/.relsPK\ntheme/theme/themeManager.xmlPK\ntheme/theme/theme1.xmlPK\ntheme/theme/_rels/themeManager.xml.relsPK\n<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<a:clrMap xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/>\nLaurence Ipsum\nNormal.dotm\nMicrosoft Office Word\nMicrosoft Word 97-2003 Document"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "n/a",
+          "expectation": "none",
+          "reason": "No strong table expectation for this file type."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/repo_sample.pptx",
+      "extension": "pptx",
+      "size_bytes": 366536,
+      "ocr_on": {
+        "parser_strategy": "python_pptx:pptx|libs:python-pptx=1.0.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0164,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 808,
+        "tokens": 452,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "## Slide 1 | Layout: Blank\nChart: Series 1: -4.3, 2.5, 3.5, -4.5 ; Series 2: 2.4, -4.4, 1.8, 2.8 ; Series 3: 2.0, 2.0, -3.0, 5.0\n## Slide 2 | Layout: Blank\nChart: Series 1: 94.3, 2.5, 3.5, 4.5 ; Series 2: 2.4, 4.4, 1.8, 2.8 ; Series 3: 2.0, 2.0, 3.0, 5.0\n## Slide 3 | Layout: Blank\nChart: value_axis.crosses == XL_AXIS_CROSSES.MAXIMUM | Y-Value 1: 2.7, 3.2, 0.8\n## Slide 4 | Layout: Blank\nChart: value_axis.crosses == XL_AXIS_CROSSES.MINIMUM | Y-Value 1: 2.7, 3.2, -3.8\n## Slide 5 | Layout: Blank\nChart: Y-Value 1: 2.7, 3.2, 0.8\n## Slide 6 | Layout: Blank\nChart: Y-Value 1: 2.7, -3.2, 0.8\n## Slide 7 | Layout: Blank\nChart: Series 1: 4.3, 2.5, 3.5, 4.5, 3.6, 15.0, 17.0\n## Slide 8 | Layout: Blank\nChart: Series 1: 4.3, 2.5, 3.5, 4.5 ; Series 2: 2.4, 4.4, 1.8, 2.8 ; Series 3: 2.0, 2.0, 3.0, 5.0"
+      },
+      "ocr_off": {
+        "parser_strategy": "python_pptx:pptx|libs:python-pptx=1.0.2",
+        "parser_error": null,
+        "parse_time_seconds": 0.0169,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 808,
+        "tokens": 452,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "## Slide 1 | Layout: Blank\nChart: Series 1: -4.3, 2.5, 3.5, -4.5 ; Series 2: 2.4, -4.4, 1.8, 2.8 ; Series 3: 2.0, 2.0, -3.0, 5.0\n## Slide 2 | Layout: Blank\nChart: Series 1: 94.3, 2.5, 3.5, 4.5 ; Series 2: 2.4, 4.4, 1.8, 2.8 ; Series 3: 2.0, 2.0, 3.0, 5.0\n## Slide 3 | Layout: Blank\nChart: value_axis.crosses == XL_AXIS_CROSSES.MAXIMUM | Y-Value 1: 2.7, 3.2, 0.8\n## Slide 4 | Layout: Blank\nChart: value_axis.crosses == XL_AXIS_CROSSES.MINIMUM | Y-Value 1: 2.7, 3.2, -3.8\n## Slide 5 | Layout: Blank\nChart: Y-Value 1: 2.7, 3.2, 0.8\n## Slide 6 | Layout: Blank\nChart: Y-Value 1: 2.7, -3.2, 0.8\n## Slide 7 | Layout: Blank\nChart: Series 1: 4.3, 2.5, 3.5, 4.5, 3.6, 15.0, 17.0\n## Slide 8 | Layout: Blank\nChart: Series 1: 4.3, 2.5, 3.5, 4.5 ; Series 2: 2.4, 4.4, 1.8, 2.8 ; Series 3: 2.0, 2.0, 3.0, 5.0"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "n/a",
+          "expectation": "none",
+          "reason": "No strong table expectation for this file type."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/sample_data.csv",
+      "extension": "csv",
+      "size_bytes": 3858,
+      "ocr_on": {
+        "parser_strategy": "textlike:csv|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|table_preview_rows:80",
+        "parser_error": null,
+        "parse_time_seconds": 0.0086,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 3047,
+        "tokens": 1958,
+        "table_markers": 1,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "[TABLE_START]\n| sepal_length | sepal_width | petal_length | petal_width | species |\n| --- | --- | --- | --- | --- |"
+      },
+      "ocr_off": {
+        "parser_strategy": "textlike:csv|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|table_preview_rows:80",
+        "parser_error": null,
+        "parse_time_seconds": 0.0085,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 3047,
+        "tokens": 1958,
+        "table_markers": 1,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "[TABLE_START]\n| sepal_length | sepal_width | petal_length | petal_width | species |\n| --- | --- | --- | --- | --- |"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "pass",
+          "expectation": "required",
+          "reason": "Expected [TABLE_START] marker found for tabular input."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/sample_data.json",
+      "extension": "json",
+      "size_bytes": 100492,
+      "ocr_on": {
+        "parser_strategy": "textlike:json|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|flattened",
+        "parser_error": null,
+        "parse_time_seconds": 0.0196,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 85332,
+        "tokens": 37952,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "[122].Year: 1973-01-01\n[122].Origin: USA\n[123].Name: pontiac grand prix\n[123].Miles_per_Gallon: 16\n[123].Cylinders: 8\n[235].Year: 1977-01-01\n[235].Origin: USA\n[236].Name: pontiac grand prix lj\n[236].Miles_per_Gallon: 16\n[236].Cylinders: 8"
+      },
+      "ocr_off": {
+        "parser_strategy": "textlike:json|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|flattened",
+        "parser_error": null,
+        "parse_time_seconds": 0.0195,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 85332,
+        "tokens": 37952,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 2,
+        "preview": "[122].Year: 1973-01-01\n[122].Origin: USA\n[123].Name: pontiac grand prix\n[123].Miles_per_Gallon: 16\n[123].Cylinders: 8\n[235].Year: 1977-01-01\n[235].Origin: USA\n[236].Name: pontiac grand prix lj\n[236].Miles_per_Gallon: 16\n[236].Cylinders: 8"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "n/a",
+          "expectation": "none",
+          "reason": "No strong table expectation for this file type."
+        }
+      }
+    },
+    {
+      "relative_path": "benchmark_samples/sample_xml.xml",
+      "extension": "xml",
+      "size_bytes": 164,
+      "ocr_on": {
+        "parser_strategy": "textlike:xml|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|flattened",
+        "parser_error": null,
+        "parse_time_seconds": 0.0023,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 122,
+        "tokens": 39,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "/note/to<to>: Tove\n/note/from<from>: Jani\n/note/heading<heading>: Reminder\n/note/body<body>: Don't forget me this weekend!"
+      },
+      "ocr_off": {
+        "parser_strategy": "textlike:xml|libs:beautifulsoup4=4.12.3,lxml=5.3.0,pandas=2.2.2|flattened",
+        "parser_error": null,
+        "parse_time_seconds": 0.0022,
+        "ocr_attempted": false,
+        "ocr_used": false,
+        "ocr_engine_trace": null,
+        "ocr_pages": 0,
+        "ocr_supplement_pages": 0,
+        "chars": 122,
+        "tokens": 39,
+        "table_markers": 0,
+        "diagram_markers": 0,
+        "table_hints": 0,
+        "preview": "/note/to<to>: Tove\n/note/from<from>: Jani\n/note/heading<heading>: Reminder\n/note/body<body>: Don't forget me this weekend!"
+      },
+      "quality": {
+        "severity": "ok",
+        "issues": [],
+        "warnings": [],
+        "chars_gain": 0,
+        "table_gain": 0,
+        "on_error_kind": "none",
+        "off_error_kind": "none",
+        "table_check": {
+          "status": "n/a",
+          "expectation": "none",
+          "reason": "No strong table expectation for this file type."
+        }
+      }
+    }
+  ]
+}
