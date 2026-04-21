@@ -231,7 +231,6 @@ Les résultats ont été réorganisés dans:
 - [test_results/benchmark/benchmark_chunks_visible.md](test_results/benchmark/benchmark_chunks_visible.md)
 - [test_results/benchmark/benchmark_chunks_visible.html](test_results/benchmark/benchmark_chunks_visible.html)
 - [test_results/ocr/ocr_analysis_report.md](test_results/ocr/ocr_analysis_report.md)
-- [test_results/ocr/ocr_previews_and_parsed_content.md](test_results/ocr/ocr_previews_and_parsed_content.md)
 - [test_results/ocr/ocr_table_examples_report.md](test_results/ocr/ocr_table_examples_report.md)
 - [test_results/ocr/ocr_table_examples_results.json](test_results/ocr/ocr_table_examples_results.json)
 - [test_results/ocr/ocr_trace_summary.md](test_results/ocr/ocr_trace_summary.md)
@@ -240,28 +239,29 @@ Les résultats ont été réorganisés dans:
 
 Artefacts reproductibles:
 - [scripts/generate_real_table_ocr_examples.py](scripts/generate_real_table_ocr_examples.py): génère un PDF multi-pages avec tableau image au milieu, un DOCX avec tableau image embarqué, puis un comparatif OCR ON/OFF.
-- [scripts/run_folder_ocr_comparison.py](scripts/run_folder_ocr_comparison.py): lance un parsing OCR ON/OFF sur tout un dossier (multi-formats), puis génère un rapport consolidé JSON + Markdown + HTML centré sur la lisibilité et les diagnostics de tables.
+- [scripts/run_folder_ocr_comparison.py](scripts/run_folder_ocr_comparison.py): lance un parsing OCR ON/OFF sur tout un dossier (multi-formats) et exporte l'integralite des textes et de tous les chunks, en sorties separees OCR ON/OFF.
 
 ## Campagne OCR ON/OFF sur un dossier
 
 Exemple (corpus benchmark):
 
 ```bash
-/home/n7student/Bureau/IA/Parsing/.venv/bin/python scripts/run_folder_ocr_comparison.py benchmark_samples --output-dir test_results/ocr_comparison --clean-output
+/home/n7student/Bureau/IA/Parsing/.venv/bin/python scripts/run_folder_ocr_comparison.py benchmark_samples --output-dir test_results/ocr_full_evaluation --clean-output
 ```
 
 Sorties générées:
-- [test_results/ocr_comparison/comparison_report.html](test_results/ocr_comparison/comparison_report.html)
-- [test_results/ocr_comparison/comparison_report.md](test_results/ocr_comparison/comparison_report.md)
-- [test_results/ocr_comparison/comparison_results.json](test_results/ocr_comparison/comparison_results.json)
+- [test_results/ocr_full_evaluation/full_report.html](test_results/ocr_full_evaluation/full_report.html)
+- [test_results/ocr_full_evaluation/full_report.md](test_results/ocr_full_evaluation/full_report.md)
+- [test_results/ocr_full_evaluation/full_results.json](test_results/ocr_full_evaluation/full_results.json)
+- [test_results/ocr_full_evaluation/chunks_ocr_on.jsonl](test_results/ocr_full_evaluation/chunks_ocr_on.jsonl)
+- [test_results/ocr_full_evaluation/chunks_ocr_off.jsonl](test_results/ocr_full_evaluation/chunks_ocr_off.jsonl)
+- [test_results/ocr_full_evaluation/documents_ocr_on/](test_results/ocr_full_evaluation/documents_ocr_on/)
+- [test_results/ocr_full_evaluation/documents_ocr_off/](test_results/ocr_full_evaluation/documents_ocr_off/)
 
-Ce rapport consolide met en avant:
-- les erreurs et warnings prioritaires,
-- la distinction parser vs dépendances/outillage (ex: antiword),
-- les écarts OCR ON vs OCR OFF,
-- les gains/pertes sur détection de tables,
-- un statut explicite de contrôle table par fichier (pass/warn/fail/blocked),
-- des extraits par fichier pour debug rapide.
+Ce format est adapte a un audit complet:
+- texte integral par fichier en OCR ON/OFF,
+- tous les chunks sans troncature,
+- datasets chunks separes OCR ON/OFF pour exploitation data.
 
 Fichiers obsolètes retirés:
 - benchmark_parsing_results.json

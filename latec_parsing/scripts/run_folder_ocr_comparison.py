@@ -5,7 +5,7 @@ This script parses each supported file twice:
 1) OCR ON
 2) OCR OFF
 
-It then chunks both full texts and writes complete artifacts without previews:
+It then chunks both full texts and writes complete integral artifacts:
 - full_results.json (full text + full chunk payload per file)
 - chunks_ocr_on.jsonl / chunks_ocr_off.jsonl (flat chunk-level datasets)
 - documents_ocr_on/*.txt / documents_ocr_off/*.txt (full extracted text)
@@ -496,7 +496,7 @@ def _build_index_markdown() -> str:
             "Generated artifacts:",
             "",
             "- full_report.html: browser view with full text/chunks for OCR ON and OCR OFF",
-            "- full_report.md: markdown full dump (no preview)",
+            "- full_report.md: markdown integral dump",
             "- full_results.json: complete structured payload (per-file full text + full chunks)",
             "- chunks_ocr_on.jsonl: flat chunk dataset for OCR ON",
             "- chunks_ocr_off.jsonl: flat chunk dataset for OCR OFF",

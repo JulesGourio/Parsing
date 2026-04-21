@@ -3,9 +3,11 @@
 Ce fichier donne un point d'entree unique vers les rapports utiles.
 
 ## Demarrage rapide (recommande)
-- Rapport consolide campagne OCR ON/OFF (HTML): [comparison_report.html](ocr_comparison/comparison_report.html)
-- Rapport consolide campagne OCR ON/OFF (Markdown): [comparison_report.md](ocr_comparison/comparison_report.md)
-- Donnees consolidees (JSON): [comparison_results.json](ocr_comparison/comparison_results.json)
+- Rapport full campagne OCR ON/OFF (HTML): [full_report.html](ocr_full_evaluation/full_report.html)
+- Rapport full campagne OCR ON/OFF (Markdown): [full_report.md](ocr_full_evaluation/full_report.md)
+- Donnees full consolidees (JSON): [full_results.json](ocr_full_evaluation/full_results.json)
+- Chunks OCR ON (JSONL): [chunks_ocr_on.jsonl](ocr_full_evaluation/chunks_ocr_on.jsonl)
+- Chunks OCR OFF (JSONL): [chunks_ocr_off.jsonl](ocr_full_evaluation/chunks_ocr_off.jsonl)
 
 ## Exemple cible tables OCR
 - Rapport exemple PDF/DOCX tables image: [ocr_table_examples_report.md](ocr/ocr_table_examples_report.md)
@@ -19,7 +21,6 @@ Ce fichier donne un point d'entree unique vers les rapports utiles.
 
 ## Rapports OCR complementaires (historique)
 - [ocr_analysis_report.md](ocr/ocr_analysis_report.md)
-- [ocr_previews_and_parsed_content.md](ocr/ocr_previews_and_parsed_content.md)
 - [ocr_trace_summary.md](ocr/ocr_trace_summary.md)
 - [ocr_trace_examples.md](ocr/ocr_trace_examples.md)
 
@@ -28,5 +29,5 @@ Ce fichier donne un point d'entree unique vers les rapports utiles.
 - [suivi_points_ameliorations.md](../suivi_points_ameliorations.md)
 
 ## Lecture conseillee
-- Pour une vue metier: ouvrir d'abord [comparison_report.html](ocr_comparison/comparison_report.html).
-- Pour debug technique: ouvrir ensuite [comparison_report.md](ocr_comparison/comparison_report.md) et [comparison_results.json](ocr_comparison/comparison_results.json).
+- Pour une vue metier + technique complete: ouvrir d'abord [full_report.html](ocr_full_evaluation/full_report.html).
+- Pour exploitation data: utiliser [full_results.json](ocr_full_evaluation/full_results.json), [chunks_ocr_on.jsonl](ocr_full_evaluation/chunks_ocr_on.jsonl), [chunks_ocr_off.jsonl](ocr_full_evaluation/chunks_ocr_off.jsonl).
