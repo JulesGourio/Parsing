@@ -1,0 +1,22 @@
+{
+  "architectures": [
+    "TableFormerV2"
+  ],
+  "model_type": "TableFormerV2",
+  "embed_dim": 512,
+  "num_heads": 8,
+  "ff_dim": 2048,
+  "num_decoder_layers": 4,
+  "vocab_size": 13,
+  "conv_mixer_expansion": 1.0,
+  "data_cells": [
+    5,
+    4,
+    10,
+    11,
+    12
+  ],
+  "pad_token_id": 0,
+  "eos_token_id": 3,
+  "transformers_version": "4.57.1"
+}
