@@ -1,21 +1,55 @@
-# Python
+# ==========================================
+# 1. Python & Environnements Virtuels
+# ==========================================
 __pycache__/
 *.py[cod]
 *.egg-info/
-
-# Virtual environment and local tools
 .venv/
+venv/
 .tools/
 
-# Local binaries/packages
+# ==========================================
+# 2. Fichiers Locaux & Binaires
+# ==========================================
+.DS_Store
 antiword_*.deb
 
-# Benchmark test corpora (PDF/DOC/XLS/etc.)
+# ==========================================
+# 3. Données de Test & Corpus
+# ==========================================
 benchmark_samples/
 benchmark_samples_hard/
+# Sécurité supplémentaire : on ne pousse jamais de PDF par erreur
+*.pdf 
 
-# Benchmark outputs and reports (legacy root-level files)
+# ==========================================
+# 4. Sorties, Rapports & Brouillons 
+# ==========================================
+# Fichiers générés à la racine
 /benchmark_*.json
 /benchmark_*.jsonl
 /benchmark_*.md
 /benchmark_*.html
+
+# Fichiers générés dans le dossier docling (Markdown, Images extraites, copies)
+docling/*.md
+docling/*_assets/
+docling/*copy.py
+
+# ==========================================
+# 5. Sous-modules buggés / non gérés
+# ==========================================
+ssalto_llm_code/
+
+# ==========================================
+# 6. Modèles IA Docling (CRITIQUE)
+# ==========================================
+# On ignore TOUS les modèles par défaut (Granite, etc. qui pèsent des Go)...
+docling/docling_models/*
+
+# ... SAUF les 5 dossiers strictement nécessaires au mode standard
+!docling/docling_models/docling-project--docling-models/
+!docling/docling_models/docling-project--TableFormerV2/
+!docling/docling_models/docling-project--CodeFormulaV2/
+!docling/docling_models/docling-project--DocumentFigureClassifier-v2.5/
+!docling/docling_models/docling-project--docling-layout-heron/
