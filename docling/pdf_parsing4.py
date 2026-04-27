@@ -1,4 +1,6 @@
 import gc
+import glob
+import hashlib
 import json
 import logging
 import mimetypes
@@ -19,9 +21,30 @@ import fitz  # PyMuPDF
 DEFAULT_CONTEXT_WINDOW = 250
 OFFLINE_MODELS_DIR = Path(__file__).resolve().parent / "docling_models"
 SCRIPT_DIR = Path(__file__).resolve().parent
-# INPUT_SOURCE = 
+import argparse
 
-OUTPUT_MD = SCRIPT_DIR / "benchmark_nextgen_report.md"
+parser = argparse.ArgumentParser(description="Docling PDF Parsing pipeline")
+parser.add_argument("--source", type=str, default=None, help="Input file or URL (single)")
+parser.add_argument(
+    "--sources",
+    nargs="*",
+    default=None,
+    help="Liste de fichiers/dossiers (supporte glob et virgules)",
+)
+parser.add_argument(
+    "--results-dir",
+    type=str,
+    default=str(SCRIPT_DIR / "results"),
+    help="Dossier racine pour les rapports par fichier",
+)
+args, _ = parser.parse_known_args()
+DEFAULT_SOURCES = [
+    str(SCRIPT_DIR / "sample.pdf"),
+    str(SCRIPT_DIR / "sample.docx"),
+    str(SCRIPT_DIR / "sample.pptx"),
+]
+INPUT_SOURCE = args.source
+RESULTS_DIR = Path(args.results_dir)
 RUNS_PER_METHOD = 1
 INCLUDE_RAW_MARKDOWN = True
 INCLUDE_IMAGE_CONTEXTS = False
@@ -131,15 +154,19 @@ class MethodBenchmark:
 
 
 SUPPORTED_METHODS = (
-    "docling_standard",
+    "docling_generic",
+    "docling_pypdfium2",
+    "docling_pymupdf",
+    "docling_docling_parse",
     "fitz_direct",
-    "docling_vlm_granite",
 )
 
 METHOD_LABELS = {
-    "docling_standard": "Docling Standard (pypdfium2)",
-    "fitz_direct": "PyMuPDF fitz natif",
-    "docling_vlm_granite": "Docling VLM Granite",
+    "docling_generic": "Docling (Universal/Auto)",
+    "docling_pypdfium2": "Docling (pypdfium2)",
+    "docling_pymupdf": "Docling (PyMuPDF)",
+    "docling_docling_parse": "Docling (docling-parse)",
+    "fitz_direct": "PyMuPDF natif brut",
 }
 
 
@@ -163,6 +190,90 @@ def detect_source_type(source: str) -> str:
     if p.is_file():
         return "file"
     return "unknown"
+
+
+def normalize_source_args(values: List[str]) -> List[str]:
+    normalized: List[str] = []
+    for value in values:
+        if not value:
+            continue
+        parts = [part.strip() for part in value.split(",") if part.strip()]
+        normalized.extend(parts)
+    return normalized
+
+
+def expand_sources(values: List[str]) -> List[str]:
+    expanded: List[str] = []
+    for value in values:
+        if is_url(value):
+            expanded.append(value)
+            continue
+
+        candidates: List[str] = []
+        if any(ch in value for ch in ["*", "?", "[", "]"]):
+            candidates = glob.glob(value)
+        else:
+            candidates = [value]
+
+        for entry in candidates:
+            p = Path(entry).expanduser()
+            if p.is_dir():
+                expanded.extend([str(f) for f in gather_files_from_directory(p)])
+            else:
+                expanded.append(str(p))
+
+    seen = set()
+    unique: List[str] = []
+    for item in expanded:
+        if item in seen:
+            continue
+        seen.add(item)
+        unique.append(item)
+    return unique
+
+
+def resolve_sources(single_source: Optional[str], many_sources: Optional[List[str]]) -> List[str]:
+    raw: List[str] = []
+    if many_sources:
+        raw.extend(many_sources)
+    if single_source:
+        raw.append(single_source)
+    if not raw:
+        raw = list(DEFAULT_SOURCES)
+    normalized = normalize_source_args(raw)
+    return expand_sources(normalized)
+
+
+def build_results_dir(source: str, results_root: Path) -> Path:
+    if is_url(source):
+        safe_label = re.sub(r"[^A-Za-z0-9._-]+", "_", source).strip("_")[:80]
+        digest = hashlib.md5(source.encode("utf-8")).hexdigest()[:8]
+        return results_root / f"url_{safe_label}_{digest}"
+
+    path = Path(source)
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", (path.stem or "source")).strip("_")
+    try:
+        resolved = str(path.resolve())
+    except Exception:
+        resolved = str(path)
+    digest = hashlib.md5(resolved.encode("utf-8")).hexdigest()[:8]
+    return results_root / f"{safe_stem}_{digest}"
+
+
+def select_methods_for_source(source: str) -> List[str]:
+    if is_url(source):
+        return list(SUPPORTED_METHODS)
+    src_path = Path(source)
+    if src_path.is_file() and src_path.suffix.lower() == ".pdf":
+        return [
+            "docling_pypdfium2",
+            "docling_pymupdf",
+            "docling_docling_parse",
+            "fitz_direct",
+        ]
+    if src_path.is_file() and src_path.suffix.lower() in {".doc", ".docx", ".ppt", ".pptx", ".md", ".html", ".xml"}:
+        return ["docling_generic"]
+    return list(SUPPORTED_METHODS)
 
 
 def sanitize_base64_for_report(md_text: str) -> str:
@@ -300,7 +411,7 @@ def extract_pdf_images_to_dir(
                     if ratio > best_ratio:
                         best_ratio = ratio
 
-                if best_ratio < min_area_ratio:
+                if best_ratio < min_area_ratio: 
                     continue
 
                 seen_xrefs.add(xref)
@@ -485,9 +596,7 @@ def extract_fitz_text_pages(pdf_path: Path) -> str:
 
 
 def fitz_extract_to_markdown(src_path: Path) -> str:
-    """Extrait le texte PDF via PyMuPDF en mode 'words' pour reconstruire les espaces manquants.
-    PyMuPDF analyse les positions des glyphes et insere les espaces a partir des gaps geometriques,
-    ce qui gere mieux les PDFs ou les espaces ne sont pas encodes dans le flux texte."""
+    """Extrait le texte et les tableaux PDF via PyMuPDF."""
     if not src_path.is_file() or src_path.suffix.lower() != ".pdf":
         return f"fitz_direct: format non supporte ({src_path.suffix})"
     parts: List[str] = []
@@ -496,6 +605,20 @@ def fitz_extract_to_markdown(src_path: Path) -> str:
             for page_num, page in enumerate(doc, 1):
                 parts.append(f"## Page {page_num}")
                 parts.append("")
+                
+                # Extraction des tableaux
+                tables = page.find_tables()
+                if tables and tables.tables:
+                    for tab in tables.tables:
+                        try:
+                            df = tab.to_pandas()
+                            parts.append(df.to_markdown(index=False))
+                            parts.append("")
+                        except Exception:
+                            # Fallback si pandas échoue
+                            parts.append("_(Tableau PyMuPDF non exportable)_")
+                            parts.append("")
+
                 words = page.get_text("words")  # [(x0,y0,x1,y1,word,block,line,word_no)]
                 if not words:
                     parts.append("_(page sans texte)_")
@@ -679,10 +802,10 @@ def build_docling_vlm_converter() -> DocumentConverter:
     )
 
 
-def build_docling_standard_converter() -> DocumentConverter:
+def _build_docling_with_backend(backend_cls, mode_name: str) -> DocumentConverter:
     if not all([PdfFormatOption, InputFormat, PdfPipelineOptions]):
-        raise RuntimeError("API Docling incomplete pour configurer le pipeline standard.")
-
+        raise RuntimeError("API Docling incomplete pour configurer le pipeline.")
+    
     if not OFFLINE_MODELS_DIR.is_dir():
         raise RuntimeError(f"Dossier de modeles local introuvable: {OFFLINE_MODELS_DIR}")
 
@@ -690,34 +813,47 @@ def build_docling_standard_converter() -> DocumentConverter:
     pipeline_opts.artifacts_path = OFFLINE_MODELS_DIR
     pipeline_opts.do_ocr = False
     pipeline_opts.do_table_structure = True
+    # Activer l'API d'images de figures via Docling natif
+    pipeline_opts.generate_picture_images = True
 
-    # Mode TableFormer ACCURATE pour une meilleure qualite de parsing des tableaux
     try:
         from docling.datamodel.pipeline_options import TableFormerMode
         pipeline_opts.table_structure_options.mode = TableFormerMode.ACCURATE
-        logger.info("Mode TableFormer ACCURATE active")
     except Exception:
         pass
 
-    # pypdfium2 gere mieux les encodages de polices non-standard que docling-parse
-    backend_cls = None
     try:
-        from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
-        backend_cls = PyPdfiumDocumentBackend
-        logger.info("Backend pypdfium2 actif (meilleur support encodages polices)")
-    except Exception:
-        logger.debug("pypdfium2 backend indisponible, utilisation du backend par defaut")
-
-    try:
-        fmt_option = (
-            PdfFormatOption(pipeline_options=pipeline_opts, backend=backend_cls)
-            if backend_cls is not None
-            else PdfFormatOption(pipeline_options=pipeline_opts)
-        )
+        fmt_option = PdfFormatOption(pipeline_options=pipeline_opts, backend=backend_cls)
     except Exception:
         fmt_option = PdfFormatOption(pipeline_options=pipeline_opts)
 
+    logger.info(f"Initialisation de Converter Docling avec backend: {mode_name}")
     return DocumentConverter(format_options={InputFormat.PDF: fmt_option})
+
+def build_docling_pypdfium2() -> DocumentConverter:
+    try:
+        from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+        return _build_docling_with_backend(PyPdfiumDocumentBackend, "pypdfium2")
+    except ImportError:
+        logger.warning("pypdfium2 backend not available. Fallback to default.")
+        return _build_docling_with_backend(None, "default")
+
+def build_docling_pymupdf() -> DocumentConverter:
+    # Custom Docling Pymupdf n'existe pas nativement, fallbacks
+    try:
+        from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
+        return _build_docling_with_backend(DoclingParseV2DocumentBackend, "docling-parse-v2")
+    except ImportError:
+        logger.warning("docling-parse-v2 backend not available. Fallback to default.")
+        return _build_docling_with_backend(None, "default")
+
+def build_docling_docling_parse() -> DocumentConverter:
+    try:
+        from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+        return _build_docling_with_backend(DoclingParseDocumentBackend, "docling-parse")
+    except ImportError:
+        logger.warning("docling-parse backend not available. Fallback to default.")
+        return _build_docling_with_backend(None, "default")
 
 
 def build_docling_standard_advanced_converter() -> DocumentConverter:
@@ -734,7 +870,8 @@ def build_docling_standard_advanced_converter() -> DocumentConverter:
     # Profil plus pousse: enrichissement formules/code et pages image utiles au parsing complexe.
     pipeline_opts.do_formula_enrichment = True
     pipeline_opts.do_code_enrichment = True
-    pipeline_opts.generate_page_images = True
+    
+    # Activer la generation des figures via l'API Docling oficielle.
     pipeline_opts.generate_picture_images = True
 
     return DocumentConverter(
@@ -772,8 +909,13 @@ def build_docling_standard_fast_converter() -> DocumentConverter:
 
 def export_markdown_from_docling_document(doc: object) -> str:
     try:
+        from docling_core.types.doc.document import ImageRefMode
+        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+    except Exception:
+        pass
+    try:
         from docling.datamodel.document import ImageRefMode
-        return doc.export_to_markdown(image_mode=ImageRefMode.PLACEHOLDER)
+        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
     except Exception:
         return doc.export_to_markdown()
 
@@ -1035,12 +1177,18 @@ def parse_single_source(
         )
 
     if converter is None:
-        if method == "docling_standard":
+        if method == "docling_generic":
+            converter = DocumentConverter()
+        elif method == "docling_pypdfium2":
             converter = (
                 build_docling_standard_fast_converter()
                 if standard_fast_mode
-                else build_docling_standard_converter()
+                else build_docling_pypdfium2()
             )
+        elif method == "docling_pymupdf":
+            converter = build_docling_pymupdf()
+        elif method == "docling_docling_parse":
+            converter = build_docling_docling_parse()
         elif method == "docling_standard_advanced":
             converter = build_docling_standard_advanced_converter()
         else:
@@ -1128,12 +1276,29 @@ def parse_anything(
             for method in methods:
                 if method == "fitz_direct":
                     pass  # pas de converter Docling
-                elif method == "docling_standard":
+                elif method == "docling_generic":
+                    if method not in converters:
+                        converters[method] = DocumentConverter()
+                elif method == "docling_pypdfium2":
                     if method not in converters:
                         try:
-                            converters[method] = build_docling_standard_converter()
+                            converters[method] = build_docling_pypdfium2()
                         except Exception as e:
-                            logger.warning("Init converter standard impossible: %s", e)
+                            logger.warning("Init converter pypdfium2 impossible: %s", e)
+                            converters[method] = None
+                elif method == "docling_pymupdf":
+                    if method not in converters:
+                        try:
+                            converters[method] = build_docling_pymupdf()
+                        except Exception as e:
+                            logger.warning("Init converter docling-parse-v2 impossible: %s", e)
+                            converters[method] = None
+                elif method == "docling_docling_parse":
+                    if method not in converters:
+                        try:
+                            converters[method] = build_docling_docling_parse()
+                        except Exception as e:
+                            logger.warning("Init converter docling-parse impossible: %s", e)
                             converters[method] = None
                 elif method == "docling_standard_advanced":
                     if method not in converters:
@@ -1186,8 +1351,14 @@ def benchmark_methods(
         converter: Optional[DocumentConverter] = None
         if method == "fitz_direct":
             pass  # pas de converter Docling
-        elif method == "docling_standard":
-            converter = build_docling_standard_converter()
+        elif method == "docling_generic":
+            converter = DocumentConverter()
+        elif method == "docling_pypdfium2":
+            converter = build_docling_pypdfium2()
+        elif method == "docling_pymupdf":
+            converter = build_docling_pymupdf()
+        elif method == "docling_docling_parse":
+            converter = build_docling_docling_parse()
         elif method == "docling_standard_advanced":
             converter = build_docling_standard_advanced_converter()
         elif method == "docling_vlm_granite":
@@ -1316,103 +1487,67 @@ def render_markdown_report(
     return "\n".join(lines)
 
 
-def inject_images_into_markdown(
-    md: str,
-    src_path: Path,
-    md_output_path: Path,
-    max_images: int = 30,
-) -> str:
-    """Extrait les images du document source et les insere a la fin du markdown.
-    Supporte PDF (PyMuPDF), PPTX (python-pptx), DOCX (zipfile)."""
-    assets_dir = md_output_path.parent / f"{md_output_path.stem}_assets"
-    suffix = src_path.suffix.lower()
-    images: List[Path] = []
-
-    if suffix == ".pdf":
-        embedded = extract_pdf_images_to_dir(src_path, assets_dir, max_images=max_images)
-        crops = extract_figure_crops_to_dir(src_path, assets_dir, max_images=max_images)
-        seen: set = set()
-        for img in embedded + crops:
-            if img.name not in seen:
-                seen.add(img.name)
-                images.append(img)
-        logger.info("%d image(s) PDF (%d raster + %d crops) depuis %s",
-                    len(images), len(embedded), len(crops), src_path.name)
-    elif suffix in {".pptx", ".ppt"}:
-        images = extract_pptx_images_to_dir(src_path, assets_dir, max_images=max_images)
-    elif suffix in {".docx", ".doc"}:
-        images = extract_docx_images_to_dir(src_path, assets_dir, max_images=max_images)
-
-    images = images[:max_images]
-
-    if not images:
-        logger.warning("Aucune image extraite depuis: %s", src_path.name)
-        return md
-
-    lines = [md, "", "---", "", f"## Images extraites ({src_path.name})", ""]
-    for i, img_path in enumerate(images, 1):
-        rel = img_path.relative_to(md_output_path.parent).as_posix()
-        lines.append(f"### Figure {i}")
-        lines.append("")
-        lines.append(f"![Figure {i}: {img_path.name}]({rel})")
-        lines.append("")
-    return "\n".join(lines)
-
-
 def main() -> None:
-    source = INPUT_SOURCE
-    output = OUTPUT_MD
-    methods = ["docling_standard", "fitz_direct"]
+    sources = resolve_sources(INPUT_SOURCE, args.sources)
+    if not sources:
+        logger.error("Aucune source detectee. Fournissez --source ou --sources.")
+        return
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     logger.info("Demarrage pipeline RAG")
-    logger.info("Source: %s", source)
+    logger.info("Sources: %d", len(sources))
     logger.info("OCR force pages completes: %s", FORCE_FULL_PAGE_OCR)
 
-    benchmarks = benchmark_methods(
-        source=source,
-        methods=methods,
-        runs_per_method=RUNS_PER_METHOD,
-        include_image_contexts=INCLUDE_IMAGE_CONTEXTS,
-    )
+    for idx, source in enumerate(sources, start=1):
+        logger.info("------------------------------")
+        logger.info("Traitement source %d/%d: %s", idx, len(sources), source)
 
-    report = render_markdown_report(
-        source=source,
-        benchmarks=benchmarks,
-        include_image_contexts=INCLUDE_IMAGE_CONTEXTS,
-        include_raw_markdown=INCLUDE_RAW_MARKDOWN,
-        context_window=DEFAULT_CONTEXT_WINDOW,
-    )
+        methods = select_methods_for_source(source)
+        output_dir = build_results_dir(source, RESULTS_DIR)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output = output_dir / "report.md"
 
-    if INCLUDE_PDF_GALLERY:
-        artifacts_for_gallery = [b.best for b in benchmarks]
-        gallery_section = build_image_gallery_section(
-            artifacts_for_gallery,
-            output,
-            max_images_per_pdf=max(1, int(GALLERY_MAX_IMAGES)),
+        benchmarks = benchmark_methods(
+            source=source,
+            methods=methods,
+            runs_per_method=RUNS_PER_METHOD,
+            include_image_contexts=INCLUDE_IMAGE_CONTEXTS,
         )
-        if gallery_section:
-            report = report + "\n\n" + gallery_section + "\n"
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(report, encoding="utf-8")
-    logger.info("Rapport genere: %s", output)
+        report = render_markdown_report(
+            source=source,
+            benchmarks=benchmarks,
+            include_image_contexts=INCLUDE_IMAGE_CONTEXTS,
+            include_raw_markdown=INCLUDE_RAW_MARKDOWN,
+            context_window=DEFAULT_CONTEXT_WINDOW,
+        )
 
-    src_path = Path(source)
-    for b in benchmarks:
-        best = b.best
-        if not best.markdown or best.error:
-            continue
-        src_stem = src_path.stem if best.source_type == "file" else "source"
-        clean_name = f"{src_stem}_{best.method.replace('+', '_')}_extracted.md"
-        clean_path = output.parent / clean_name
-        md = best.markdown
+        if INCLUDE_PDF_GALLERY:
+            artifacts_for_gallery = [b.best for b in benchmarks]
+            gallery_section = build_image_gallery_section(
+                artifacts_for_gallery,
+                output,
+                max_images_per_pdf=max(1, int(GALLERY_MAX_IMAGES)),
+            )
+            if gallery_section:
+                report = report + "\n\n" + gallery_section + "\n"
 
-        # Injection d'images uniquement pour la methode docling (pas fitz_direct)
-        if best.method != "fitz_direct" and best.source_type == "file" and src_path.suffix.lower() in {".pdf", ".pptx", ".ppt", ".docx", ".doc"}:
-            md = inject_images_into_markdown(md, src_path, clean_path, max_images=IMAGES_PER_PDF)
+        output.write_text(report, encoding="utf-8")
+        logger.info("Rapport genere: %s", output)
 
-        clean_path.write_text(md, encoding="utf-8")
-        logger.info("Markdown extrait sauvegarde: %s", clean_path)
+        src_path = Path(source)
+        for b in benchmarks:
+            best = b.best
+            if not best.markdown or best.error:
+                continue
+            src_stem = src_path.stem if best.source_type == "file" else "source"
+            clean_name = f"{src_stem}_{best.method.replace('+', '_')}_extracted.md"
+            clean_path = output_dir / clean_name
+            md = best.markdown
+
+            clean_path.write_text(md, encoding="utf-8")
+            logger.info("Markdown extrait sauvegarde: %s", clean_path)
 
 
 if __name__ == "__main__":
