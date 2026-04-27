@@ -19,13 +19,18 @@ import fitz  # PyMuPDF
 DEFAULT_CONTEXT_WINDOW = 250
 OFFLINE_MODELS_DIR = Path(__file__).resolve().parent / "docling_models"
 SCRIPT_DIR = Path(__file__).resolve().parent
-INPUT_SOURCE = "/home/n7student/Téléchargements/2410.09871v1.pdf"
+# INPUT_SOURCE = 
+
 OUTPUT_MD = SCRIPT_DIR / "benchmark_nextgen_report.md"
-RUNS_PER_METHOD = 2
+RUNS_PER_METHOD = 1
 INCLUDE_RAW_MARKDOWN = True
-INCLUDE_IMAGE_CONTEXTS = True
+INCLUDE_IMAGE_CONTEXTS = False
 INCLUDE_PDF_GALLERY = True
-GALLERY_MAX_IMAGES = 12
+GALLERY_MAX_IMAGES = 500
+# Activer uniquement si des modeles OCR sont disponibles dans docling_models/
+FORCE_FULL_PAGE_OCR = False
+IMAGES_PER_PDF = 500          # Nombre max d'images extraites via PyMuPDF par document
+FIX_GARBLED_TEXT = True      # Correction ASCII+29 ligne par ligne apres pypdfium2 (mixte-encodage)
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -127,13 +132,13 @@ class MethodBenchmark:
 
 SUPPORTED_METHODS = (
     "docling_standard",
-    "docling_standard_advanced",
+    "fitz_direct",
     "docling_vlm_granite",
 )
 
 METHOD_LABELS = {
-    "docling_standard": "Docling Standard",
-    "docling_standard_advanced": "Docling Standard Avance",
+    "docling_standard": "Docling Standard (pypdfium2)",
+    "fitz_direct": "PyMuPDF fitz natif",
     "docling_vlm_granite": "Docling VLM Granite",
 }
 
@@ -330,42 +335,59 @@ def extract_figure_crops_to_dir(
     images_dir: Path,
     max_images: int = 8,
 ) -> List[Path]:
+    """Crop les images embarquees dans le PDF autour de leurs vraies coordonnees."""
     images_dir.mkdir(parents=True, exist_ok=True)
     saved_images: List[Path] = []
-    caption_re = re.compile(r"\b(fig\.|figure)\s*\d+", re.IGNORECASE)
 
     with fitz.open(str(pdf_path)) as doc:
+        seen_xrefs: set = set()
         for page_idx, page in enumerate(doc, start=1):
             if len(saved_images) >= max_images:
                 break
 
-            blocks = page.get_text("blocks")
-            # block tuple: (x0, y0, x1, y1, text, block_no, block_type)
-            for block in blocks:
+            page_area = float(page.rect.width * page.rect.height)
+            if page_area <= 0:
+                continue
+
+            for img_info in page.get_images(full=True):
                 if len(saved_images) >= max_images:
                     break
-                text = block[4] if len(block) > 4 else ""
-                if not text or not caption_re.search(text):
-                    continue
-
-                y0 = float(block[1])
-                y1 = float(block[3])
-                page_h = float(page.rect.height)
-                page_w = float(page.rect.width)
-
-                # Heuristic: figure is usually above caption.
-                clip_top = max(0.0, y0 - page_h * 0.35)
-                clip_bottom = min(page_h, y1 + page_h * 0.03)
-                clip = fitz.Rect(0.0, clip_top, page_w, clip_bottom)
-                if clip.height < 120 or clip.width < 200:
+                xref = img_info[0]
+                if xref in seen_xrefs:
                     continue
 
                 try:
-                    pix = page.get_pixmap(clip=clip, matrix=fitz.Matrix(1.6, 1.6), alpha=False)
+                    rects = page.get_image_rects(xref)
+                except Exception:
+                    continue
+                if not rects:
+                    continue
+
+                # Choisir le rect le plus grand
+                rect = max(rects, key=lambda r: r.width * r.height)
+                ratio = float(rect.width * rect.height) / page_area
+                if ratio < 0.015:
+                    continue
+
+                seen_xrefs.add(xref)
+
+                # Crop autour des vraies coordonnees + petite marge
+                pad = 4.0
+                clip = fitz.Rect(
+                    max(0.0, rect.x0 - pad),
+                    max(0.0, rect.y0 - pad),
+                    min(page.rect.width, rect.x1 + pad),
+                    min(page.rect.height, rect.y1 + pad),
+                )
+                if clip.width < 60 or clip.height < 60:
+                    continue
+
+                try:
+                    pix = page.get_pixmap(clip=clip, matrix=fitz.Matrix(2.0, 2.0), alpha=False)
                 except Exception:
                     continue
 
-                out_name = f"{pdf_path.stem}_figure_p{page_idx:03d}_{len(saved_images)+1:03d}.png"
+                out_name = f"{pdf_path.stem}_fig_p{page_idx:03d}_x{xref}.png"
                 out_path = images_dir / out_name
                 try:
                     pix.save(str(out_path))
@@ -375,6 +397,135 @@ def extract_figure_crops_to_dir(
                 saved_images.append(out_path)
 
     return saved_images
+
+
+def extract_pptx_images_to_dir(
+    pptx_path: Path,
+    images_dir: Path,
+    max_images: int = 30,
+) -> List[Path]:
+    """Extrait les images embarquees dans un fichier PPTX via python-pptx."""
+    images_dir.mkdir(parents=True, exist_ok=True)
+    saved: List[Path] = []
+    try:
+        from pptx import Presentation  # type: ignore[import]
+        prs = Presentation(str(pptx_path))
+        idx = 0
+        for slide_num, slide in enumerate(prs.slides, 1):
+            for shape in slide.shapes:
+                if len(saved) >= max_images:
+                    break
+                # shape_type 13 = PICTURE
+                if not hasattr(shape, "image"):
+                    continue
+                try:
+                    image = shape.image
+                    ext = image.ext or "png"
+                    out_path = images_dir / f"{pptx_path.stem}_s{slide_num:03d}_i{idx:03d}.{ext}"
+                    out_path.write_bytes(image.blob)
+                    saved.append(out_path)
+                    idx += 1
+                except Exception:
+                    continue
+    except ImportError:
+        logger.warning("python-pptx non disponible — pip install python-pptx pour extraire les images PPTX")
+    except Exception as e:
+        logger.warning("Erreur extraction images PPTX: %s", e)
+    logger.info("%d image(s) extraite(s) depuis PPTX %s", len(saved), pptx_path.name)
+    return saved
+
+
+def extract_docx_images_to_dir(
+    docx_path: Path,
+    images_dir: Path,
+    max_images: int = 30,
+) -> List[Path]:
+    """Extrait les images embarquees dans un fichier DOCX via zipfile (word/media/)."""
+    import zipfile
+    images_dir.mkdir(parents=True, exist_ok=True)
+    saved: List[Path] = []
+    valid_ext = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif", ".webp"}
+    try:
+        with zipfile.ZipFile(str(docx_path), "r") as z:
+            media = [f for f in z.namelist() if f.startswith("word/media/")]
+            for entry in media[:max_images]:
+                if Path(entry).suffix.lower() not in valid_ext:
+                    continue
+                out_path = images_dir / f"{docx_path.stem}_{Path(entry).name}"
+                out_path.write_bytes(z.read(entry))
+                saved.append(out_path)
+    except Exception as e:
+        logger.warning("Erreur extraction images DOCX: %s", e)
+    logger.info("%d image(s) extraite(s) depuis DOCX %s", len(saved), docx_path.name)
+    return saved
+
+
+def extract_fitz_text_pages(pdf_path: Path) -> str:
+    """Extrait le texte brut page par page via PyMuPDF pour comparaison avec Docling."""
+    sections: List[str] = []
+    sections.append("## Extraction texte brut PyMuPDF/fitz — comparaison")
+    sections.append("")
+    sections.append("> Texte natif extrait directement par PyMuPDF sans traitement ML.")
+    sections.append("")
+    try:
+        with fitz.open(str(pdf_path)) as doc:
+            for page_num, page in enumerate(doc, start=1):
+                text = page.get_text("text").strip()
+                if not text:
+                    continue
+                sections.append(f"### Page {page_num}")
+                sections.append("")
+                sections.append("```text")
+                sections.append(text)
+                sections.append("```")
+                sections.append("")
+    except Exception as e:
+        sections.append(f"Erreur PyMuPDF: {e}")
+    return "\n".join(sections)
+
+
+def fitz_extract_to_markdown(src_path: Path) -> str:
+    """Extrait le texte PDF via PyMuPDF en mode 'words' pour reconstruire les espaces manquants.
+    PyMuPDF analyse les positions des glyphes et insere les espaces a partir des gaps geometriques,
+    ce qui gere mieux les PDFs ou les espaces ne sont pas encodes dans le flux texte."""
+    if not src_path.is_file() or src_path.suffix.lower() != ".pdf":
+        return f"fitz_direct: format non supporte ({src_path.suffix})"
+    parts: List[str] = []
+    try:
+        with fitz.open(str(src_path)) as doc:
+            for page_num, page in enumerate(doc, 1):
+                parts.append(f"## Page {page_num}")
+                parts.append("")
+                words = page.get_text("words")  # [(x0,y0,x1,y1,word,block,line,word_no)]
+                if not words:
+                    parts.append("_(page sans texte)_")
+                    parts.append("")
+                    continue
+                words.sort(key=lambda w: (w[1], w[0]))
+                TOL_Y = 4.0
+                current_y = words[0][1]
+                current_block = words[0][5]
+                line_buf: List[str] = []
+                for w in words:
+                    wy, wb = w[1], w[5]
+                    new_line = abs(wy - current_y) > TOL_Y
+                    new_block = wb != current_block
+                    if new_line or new_block:
+                        if line_buf:
+                            parts.append(" ".join(line_buf))
+                        if new_block:
+                            parts.append("")
+                        line_buf = [w[4]]
+                        current_y = wy
+                        current_block = wb
+                    else:
+                        line_buf.append(w[4])
+                if line_buf:
+                    parts.append(" ".join(line_buf))
+                parts.append("")
+    except Exception as e:
+        parts.append(f"Erreur fitz: {e}")
+    return "\n".join(parts)
 
 
 def build_image_gallery_section(
@@ -540,11 +691,33 @@ def build_docling_standard_converter() -> DocumentConverter:
     pipeline_opts.do_ocr = False
     pipeline_opts.do_table_structure = True
 
-    return DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_opts),
-        }
-    )
+    # Mode TableFormer ACCURATE pour une meilleure qualite de parsing des tableaux
+    try:
+        from docling.datamodel.pipeline_options import TableFormerMode
+        pipeline_opts.table_structure_options.mode = TableFormerMode.ACCURATE
+        logger.info("Mode TableFormer ACCURATE active")
+    except Exception:
+        pass
+
+    # pypdfium2 gere mieux les encodages de polices non-standard que docling-parse
+    backend_cls = None
+    try:
+        from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+        backend_cls = PyPdfiumDocumentBackend
+        logger.info("Backend pypdfium2 actif (meilleur support encodages polices)")
+    except Exception:
+        logger.debug("pypdfium2 backend indisponible, utilisation du backend par defaut")
+
+    try:
+        fmt_option = (
+            PdfFormatOption(pipeline_options=pipeline_opts, backend=backend_cls)
+            if backend_cls is not None
+            else PdfFormatOption(pipeline_options=pipeline_opts)
+        )
+    except Exception:
+        fmt_option = PdfFormatOption(pipeline_options=pipeline_opts)
+
+    return DocumentConverter(format_options={InputFormat.PDF: fmt_option})
 
 
 def build_docling_standard_advanced_converter() -> DocumentConverter:
@@ -600,10 +773,202 @@ def build_docling_standard_fast_converter() -> DocumentConverter:
 def export_markdown_from_docling_document(doc: object) -> str:
     try:
         from docling.datamodel.document import ImageRefMode
-
-        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+        return doc.export_to_markdown(image_mode=ImageRefMode.PLACEHOLDER)
     except Exception:
         return doc.export_to_markdown()
+
+
+def decode_html_entities(text: str) -> str:
+    import html
+    return html.unescape(text)
+
+
+# Vocabulaire de reference pour detecter le decalage ASCII+29 (mots attendus apres decodage)
+_GARBLED_VOCAB = frozenset([
+    # Mots courants anglais
+    "the", "and", "for", "are", "not", "with", "from", "this", "that", "have",
+    "been", "will", "they", "more", "than", "each", "such", "only", "used",
+    "shall", "must", "when", "where", "which", "also", "both", "then", "into",
+    "upon", "after", "before", "during", "under", "over", "between", "within",
+    "above", "below", "other", "these", "those", "their", "there", "here",
+    "does", "made", "make", "take", "give", "work", "case", "time", "year",
+    "part", "item", "step", "note", "date", "code", "task", "size", "data",
+    "test", "open", "close", "next", "back", "left", "right", "side", "area",
+    # Termes techniques generaux
+    "general", "rules", "usage", "parts", "aircraft", "maintenance", "manual",
+    "installation", "removal", "section", "figure", "table", "intended",
+    "identify", "needed", "equipment", "information", "document", "description",
+    "number", "revision", "issue", "page", "list", "type", "name", "unit",
+    "purpose", "scope", "apply", "check", "record", "report", "design",
+    "standard", "structure", "system", "perform", "following", "accordance",
+    "drawing", "assembly", "repair", "inspection", "torque", "limit", "value",
+    "sheet", "class", "level", "reference", "related", "required", "specified",
+    "paragraph", "content", "status", "title", "weight", "engineering",
+    "certification", "definitions", "preparation", "procedure", "attachment",
+    "fastener", "sealant", "tools", "special", "access", "panel",
+    "verify", "ensure", "confirm", "complete", "prior", "chapter",
+    "function", "operation", "material", "method", "modification", "original",
+    "production", "quality", "replacement", "requirement", "responsibility",
+    "safety", "spare", "supplier", "support", "technical", "validation",
+    "verification", "version", "applicable", "application", "authorizer",
+    "authorization", "classification", "component", "condition", "impact",
+    "include", "install", "instruction", "compliance", "control", "criteria",
+    "concession", "assessment", "assembly", "applicable", "category",
+    "effectivity", "tolerance", "specification", "configuration", "compliance",
+    "airworthiness", "release", "approval", "approved", "issue", "status",
+    "chapter", "paragraph", "subparagraph", "subject", "title", "contents",
+    "introduction", "background", "scope", "applicability", "definitions",
+    "references", "requirements", "procedures", "documentation", "records",
+    "reporting", "training", "responsibilities", "management", "planning",
+    "implementation", "monitoring", "review", "actions", "corrective",
+    "preventive", "audit", "findings", "evidence", "objective", "result",
+])
+
+
+def _detect_garbled_text(md: str, shift: int = 29) -> bool:
+    """Detecte si le texte extrait contient un decalage ASCII systematique."""
+    tokens = re.findall(r'[!"#$%&\'()*+,\-./0-9:;<=>?@A-Z\[\\\]^_]{4,}', md[:5000])
+    if len(tokens) < 10:
+        return False
+    hits = 0
+    for tok in tokens[:60]:
+        decoded = ''.join(
+            chr(ord(c) + shift) if ord(c) + shift <= 126 else c for c in tok
+        ).lower()
+        if any(word in decoded for word in _GARBLED_VOCAB if len(word) >= 4):
+            hits += 1
+    ratio = hits / min(len(tokens), 60)
+    if ratio > 0.12:
+        logger.info("Encodage decale detecte (ratio=%.2f), correction +%d appliquee", ratio, shift)
+        return True
+    return False
+
+
+def _shift_str(s: str, shift: int = 29) -> str:
+    """Applique le decalage +29 uniquement aux caracteres dans la plage garbled (33-97).
+    Preserves les espaces, tabulations, accents et caracteres > 97."""
+    result = []
+    for c in s:
+        code = ord(c)
+        if 33 <= code <= 97:
+            new_code = code + shift
+            if new_code <= 126:
+                result.append(chr(new_code))
+                continue
+        result.append(c)
+    return "".join(result)
+
+
+def _content_is_garbled(text: str, shift: int = 29) -> bool:
+    """Detecte si un fragment de texte est garble (decalage +29).
+    Contrairement a _detect_garbled_text, fonctionne sur un seul fragment court."""
+    tokens = re.findall(r'[!"#$%&\'()*+,\-./0-9:;<=>?@A-Z\[\\\]^_]{4,}', text)
+    if not tokens:
+        return False
+    hits = sum(
+        1 for tok in tokens
+        if any(
+            w in "".join(chr(ord(c) + shift) if ord(c) + shift <= 126 else c for c in tok).lower()
+            for w in _GARBLED_VOCAB if len(w) >= 4
+        )
+    )
+    return hits > 0 and hits / len(tokens) >= 0.15
+
+
+def fix_garbled_text_if_needed(md: str) -> str:
+    """Corrige le decalage ASCII+29 ligne par ligne.
+    Seules les lignes detectees comme garblees sont modifiees — le texte deja correct est preserve."""
+    if not FIX_GARBLED_TEXT or not _detect_garbled_text(md):
+        return md
+
+    table_sep_re = re.compile(r"^\s*\|[-|: ]+\|\s*$")
+    hr_re = re.compile(r"^\s*[-*_]{3,}\s*$")
+    lines_out: List[str] = []
+    in_code_block = False
+
+    for line in md.split("\n"):
+        stripped = line.strip()
+
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_code_block = not in_code_block
+            lines_out.append(line)
+            continue
+        if in_code_block or not stripped:
+            lines_out.append(line)
+            continue
+        if stripped.startswith("<"):
+            lines_out.append(line)
+            continue
+        if hr_re.match(stripped) or table_sep_re.match(stripped):
+            lines_out.append(line)
+            continue
+
+        # Titre : corriger le contenu uniquement si garble
+        m = re.match(r"^(#{1,6} )(.*)", line)
+        if m:
+            content = m.group(2)
+            lines_out.append(m.group(1) + (_shift_str(content) if _content_is_garbled(content) else content))
+            continue
+
+        # Ligne de tableau : corriger cellule par cellule
+        if stripped.startswith("|") and stripped.endswith("|"):
+            parts = line.split("|")
+            lines_out.append("|".join(
+                _shift_str(p) if 0 < i < len(parts) - 1 and _content_is_garbled(p) else p
+                for i, p in enumerate(parts)
+            ))
+            continue
+
+        # Liste
+        m = re.match(r"^(\s*(?:[-*+]|\d+\.)\s+)(.*)", line)
+        if m:
+            content = m.group(2)
+            lines_out.append(m.group(1) + (_shift_str(content) if _content_is_garbled(content) else content))
+            continue
+
+        # Blockquote
+        m = re.match(r"^(>+\s*)(.*)", line)
+        if m:
+            content = m.group(2)
+            lines_out.append(m.group(1) + (_shift_str(content) if _content_is_garbled(content) else content))
+            continue
+
+        # Texte ordinaire
+        lines_out.append(_shift_str(line) if _content_is_garbled(line) else line)
+
+    return "\n".join(lines_out)
+
+
+def convert_doc_to_docx(doc_path: Path) -> Optional[Path]:
+    """Convertit un fichier .doc binaire en .docx via LibreOffice headless."""
+    docx_path = doc_path.with_suffix(".docx")
+    if docx_path.exists():
+        logger.info("Fichier .docx deja present: %s", docx_path.name)
+        return docx_path
+    import subprocess
+    candidates = [
+        "soffice",
+        "libreoffice",
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+    ]
+    for exe in candidates:
+        try:
+            subprocess.run(
+                [exe, "--headless", "--convert-to", "docx",
+                 "--outdir", str(doc_path.parent), str(doc_path)],
+                capture_output=True,
+                timeout=120,
+            )
+            if docx_path.exists():
+                logger.info("Conversion .doc -> .docx reussie: %s", docx_path.name)
+                return docx_path
+        except (FileNotFoundError, OSError):
+            continue
+        except Exception:
+            continue
+    logger.warning("Conversion .doc -> .docx echouee pour %s (LibreOffice requis)", doc_path.name)
+    return None
 
 
 def parse_single_source(
@@ -616,6 +981,16 @@ def parse_single_source(
     source_type = detect_source_type(source)
     start = time.time()
     warnings: List[str] = []
+
+    # Auto-conversion .doc -> .docx (Docling ne supporte pas le format .doc binaire)
+    if source_type == "file" and Path(source).suffix.lower() == ".doc":
+        converted = convert_doc_to_docx(Path(source))
+        if converted is not None:
+            source = str(converted)
+            warnings.append(f"Fichier .doc converti automatiquement en .docx: {converted.name}")
+        else:
+            warnings.append("Conversion .doc -> .docx impossible (LibreOffice non trouve)")
+            # On continue quand meme; Docling va echouer et le fallback texte sera tente
 
     if source_type not in {"file", "url"}:
         return ParsedArtifact(
@@ -643,6 +1018,22 @@ def parse_single_source(
             error=f"Methode invalide: {method}",
         )
 
+    # Methode fitz_direct: bypass Docling, extraction native PyMuPDF
+    if method == "fitz_direct":
+        src = Path(source)
+        md = fitz_extract_to_markdown(src)
+        elapsed = time.time() - start
+        return ParsedArtifact(
+            source=source,
+            source_type=source_type,
+            method=method,
+            parse_elapsed_s=elapsed,
+            markdown=md,
+            stats=analyze_markdown_content(md),
+            image_contexts=[],
+            warnings=warnings,
+        )
+
     if converter is None:
         if method == "docling_standard":
             converter = (
@@ -657,13 +1048,13 @@ def parse_single_source(
 
     try:
         result = converter.convert(source)
-        md_raw = export_markdown_from_docling_document(result.document)
-        # Keep raw markdown for report rendering so embedded images remain visible.
-        md_for_analysis = sanitize_base64_for_report(md_raw)
+        md = fix_garbled_text_if_needed(
+            decode_html_entities(export_markdown_from_docling_document(result.document))
+        )
         elapsed = time.time() - start
-        stats = analyze_markdown_content(md_for_analysis)
+        stats = analyze_markdown_content(md)
         contexts = (
-            extract_image_contexts(md_for_analysis, context_window=DEFAULT_CONTEXT_WINDOW)
+            extract_image_contexts(md, context_window=DEFAULT_CONTEXT_WINDOW)
             if include_image_contexts
             else []
         )
@@ -673,7 +1064,7 @@ def parse_single_source(
             source_type=source_type,
             method=method,
             parse_elapsed_s=elapsed,
-            markdown=md_raw,
+            markdown=md,
             stats=stats,
             image_contexts=contexts,
             warnings=warnings,
@@ -735,7 +1126,9 @@ def parse_anything(
             logger.info("Traitement: %s", file_path)
             converters: Dict[str, Optional[DocumentConverter]] = {}
             for method in methods:
-                if method == "docling_standard":
+                if method == "fitz_direct":
+                    pass  # pas de converter Docling
+                elif method == "docling_standard":
                     if method not in converters:
                         try:
                             converters[method] = build_docling_standard_converter()
@@ -791,7 +1184,9 @@ def benchmark_methods(
         runs: List[ParsedArtifact] = []
 
         converter: Optional[DocumentConverter] = None
-        if method == "docling_standard":
+        if method == "fitz_direct":
+            pass  # pas de converter Docling
+        elif method == "docling_standard":
             converter = build_docling_standard_converter()
         elif method == "docling_standard_advanced":
             converter = build_docling_standard_advanced_converter()
@@ -904,68 +1299,74 @@ def render_markdown_report(
 
         lines.append("### Images")
         lines.append("")
-        lines.append(f"Nombre de references image detectees: {a.stats.get('images_refs', 0)}")
+        lines.append(f"Placeholders images Docling detectes: {a.stats.get('images_refs', 0)}")
+        lines.append("(Les images reelles sont extraites et affichees dans le fichier `_extracted.md`)")
         lines.append("")
 
-        if not include_image_contexts:
-            lines.append("Contexte image detaille desactive (mode rapide).")
-            lines.append("")
-        else:
-            if not a.image_contexts:
-                lines.append("Aucune image detectee.")
-                lines.append("")
-            for img in a.image_contexts:
-                lines.append(f"#### Image {img.image_index}")
-                lines.append("")
-                lines.append(f"- Reference image: {img.image_ref}")
-                lines.append("")
-                lines.append("Contexte avant")
-                lines.append("")
-                lines.append("```text")
-                lines.append(truncate_for_display(img.context_before, max_len=context_window))
-                lines.append("```")
-                lines.append("")
-                lines.append("Contexte apres")
-                lines.append("")
-                lines.append("```text")
-                lines.append(truncate_for_display(img.context_after, max_len=context_window))
-                lines.append("```")
-                lines.append("")
-                lines.append("Prompt LLM simule")
-                lines.append("")
-                lines.append("```text")
-                lines.append(img.llm_prompt)
-                lines.append("```")
-                lines.append("")
-                lines.append("Resume simule")
-                lines.append("")
-                lines.append("```text")
-                lines.append(img.simulated_summary)
-                lines.append("```")
-                lines.append("")
-
         if include_raw_markdown:
-            lines.append("### Markdown extrait")
+            lines.append("### Contenu extrait (rendu)")
             lines.append("")
-            lines.append("```markdown")
+            lines.append("---")
+            lines.append("")
             lines.append(a.markdown)
-            lines.append("```")
+            lines.append("")
+            lines.append("---")
             lines.append("")
 
+    return "\n".join(lines)
+
+
+def inject_images_into_markdown(
+    md: str,
+    src_path: Path,
+    md_output_path: Path,
+    max_images: int = 30,
+) -> str:
+    """Extrait les images du document source et les insere a la fin du markdown.
+    Supporte PDF (PyMuPDF), PPTX (python-pptx), DOCX (zipfile)."""
+    assets_dir = md_output_path.parent / f"{md_output_path.stem}_assets"
+    suffix = src_path.suffix.lower()
+    images: List[Path] = []
+
+    if suffix == ".pdf":
+        embedded = extract_pdf_images_to_dir(src_path, assets_dir, max_images=max_images)
+        crops = extract_figure_crops_to_dir(src_path, assets_dir, max_images=max_images)
+        seen: set = set()
+        for img in embedded + crops:
+            if img.name not in seen:
+                seen.add(img.name)
+                images.append(img)
+        logger.info("%d image(s) PDF (%d raster + %d crops) depuis %s",
+                    len(images), len(embedded), len(crops), src_path.name)
+    elif suffix in {".pptx", ".ppt"}:
+        images = extract_pptx_images_to_dir(src_path, assets_dir, max_images=max_images)
+    elif suffix in {".docx", ".doc"}:
+        images = extract_docx_images_to_dir(src_path, assets_dir, max_images=max_images)
+
+    images = images[:max_images]
+
+    if not images:
+        logger.warning("Aucune image extraite depuis: %s", src_path.name)
+        return md
+
+    lines = [md, "", "---", "", f"## Images extraites ({src_path.name})", ""]
+    for i, img_path in enumerate(images, 1):
+        rel = img_path.relative_to(md_output_path.parent).as_posix()
+        lines.append(f"### Figure {i}")
+        lines.append("")
+        lines.append(f"![Figure {i}: {img_path.name}]({rel})")
+        lines.append("")
     return "\n".join(lines)
 
 
 def main() -> None:
     source = INPUT_SOURCE
     output = OUTPUT_MD
-    methods = [
-        "docling_standard",
-        "docling_standard_advanced",
-    ]
+    methods = ["docling_standard", "fitz_direct"]
 
-    logger.info("Demarrage pipeline RAG multi-formats")
+    logger.info("Demarrage pipeline RAG")
     logger.info("Source: %s", source)
-    logger.info("Methodes actives: %s", ", ".join(methods))
+    logger.info("OCR force pages completes: %s", FORCE_FULL_PAGE_OCR)
 
     benchmarks = benchmark_methods(
         source=source,
@@ -995,6 +1396,23 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(report, encoding="utf-8")
     logger.info("Rapport genere: %s", output)
+
+    src_path = Path(source)
+    for b in benchmarks:
+        best = b.best
+        if not best.markdown or best.error:
+            continue
+        src_stem = src_path.stem if best.source_type == "file" else "source"
+        clean_name = f"{src_stem}_{best.method.replace('+', '_')}_extracted.md"
+        clean_path = output.parent / clean_name
+        md = best.markdown
+
+        # Injection d'images uniquement pour la methode docling (pas fitz_direct)
+        if best.method != "fitz_direct" and best.source_type == "file" and src_path.suffix.lower() in {".pdf", ".pptx", ".ppt", ".docx", ".doc"}:
+            md = inject_images_into_markdown(md, src_path, clean_path, max_images=IMAGES_PER_PDF)
+
+        clean_path.write_text(md, encoding="utf-8")
+        logger.info("Markdown extrait sauvegarde: %s", clean_path)
 
 
 if __name__ == "__main__":
