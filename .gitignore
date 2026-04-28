@@ -53,3 +53,5 @@ docling/docling_models/*
 !docling/docling_models/docling-project--CodeFormulaV2/
 !docling/docling_models/docling-project--DocumentFigureClassifier-v2.5/
 !docling/docling_models/docling-project--docling-layout-heron/
+!docling/docling_models/sentence-transformers--all-MiniLM-L6-v2/
+!docling/docling_models/sentence-transformers--all-MiniLM-L6-v2/**
