@@ -55,3 +55,10 @@ docling/docling_models/*
 !docling/docling_models/docling-project--docling-layout-heron/
 !docling/docling_models/sentence-transformers--all-MiniLM-L6-v2/
 !docling/docling_models/sentence-transformers--all-MiniLM-L6-v2/**
+# ==========================================
+# Heavy artefacts (models and offline wheels): keep out of git and LFS
+# ==========================================
+docling/docling_models/
+docling/paquets_python_offline/
+*.whl
+*.safetensors
